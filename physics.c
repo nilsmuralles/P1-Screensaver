@@ -38,3 +38,37 @@ void init_bodies(Body *bodies, int n_bodies) {
   }
 }
 
+void calculate_forces(Body *bodies, int n_bodies, float *ax, float *ay) {
+  for (int i = 0; i < n_bodies; i++) {
+    float sum_ax = 0.0f;
+    float sum_ay = 0.0f;
+
+    for (int j = 0; j < n_bodies; j++) {
+      if (i == j) continue;
+      
+      float dx = bodies[j].x - bodies[i].x;
+      float dy = bodies[j].y - bodies[i].y;
+      float r2 = dx*dx + dy*dy + EPSILON*EPSILON;
+      float r  = sqrtf(r2);
+
+      float f = CONST_G * bodies[j].mass / (r2 * r);
+
+      sum_ax += f * dx;
+      sum_ay += f * dy;
+      
+    } 
+
+    ax[i] = sum_ax;
+    ay[i] = sum_ay;
+  }
+}
+
+void update_bodies(Body *bodies, int n_bodies, float *ax, float *ay, float dt) {
+  for (int i = 0; i < n_bodies; i++) {
+    bodies[i].vx += ax[i] * dt;
+    bodies[i].vy += ay[i] * dt;
+
+    bodies[i].x += bodies[i].vx * dt;
+    bodies[i].y += bodies[i].vy * dt;
+  }
+}
