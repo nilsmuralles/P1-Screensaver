@@ -1,0 +1,22 @@
+# Binarios compilados
+main
+*.o
+*.out
+*.exe
+*.obj
+*.dSYM/
+core
+core.*
+
+# Directorios de build, por si organizan uno después
+/build/
+/bin/
+
+# Editores / IDEs
+.vscode/
+.idea/
+*.swp
+
+# Sistema
+.DS_Store
+Thumbs.db
