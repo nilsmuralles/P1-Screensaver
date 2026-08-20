@@ -1,3 +1,6 @@
+#ifndef SCREENSAVER_H
+#define SCREENSAVER_H
+
 #define WIDTH 640
 #define HEIGHT 480
 #define MIN_FPS 30
@@ -22,3 +25,5 @@ void init_bodies(Body *bodies, int n_boides);
 void calculate_forces(Body *bodies, int n_bodies, float *ax, float *ay);
 void update_bodies(Body *bodies, int n_bodies, float *ax, float *ay, float dt);
 int parse_args(int argc, char *argv[], int *n_bodies);
+
+#endif

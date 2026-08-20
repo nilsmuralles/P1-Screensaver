@@ -15,7 +15,7 @@ else
     OMP_LDFLAGS := -fopenmp
 endif
 
-SRCS = main.c physics.c
+SRCS = main.c physics.c render.c
 OBJS = $(SRCS:.c=.o)
 TARGET = main
 
@@ -29,13 +29,16 @@ DEMO_OBJS = $(DEMO_SRCS:.c=.o)
 DEMO_TARGET = render_demo
 
 $(TARGET): $(OBJS)
-	$(CC) $(OBJS) -o $(TARGET) $(LDFLAGS)
+	$(CC) $(OBJS) -o $(TARGET) $(LDFLAGS) $(SDL2_LDFLAGS)
 
 %.o: %.c screensaver.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Los .o que usan SDL necesitan sus propios flags de include/link;
 # estas reglas explicitas tienen prioridad sobre el patron generico de arriba.
+main.o: main.c render.h screensaver.h
+	$(CC) $(CFLAGS) $(SDL2_CFLAGS) -c main.c -o main.o
+
 render.o: render.c render.h screensaver.h
 	$(CC) $(CFLAGS) $(SDL2_CFLAGS) -c render.c -o render.o
 

@@ -20,3 +20,5 @@ core.*
 # Sistema
 .DS_Store
 Thumbs.db
+
+compile_flags.txt

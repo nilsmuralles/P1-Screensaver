@@ -10,7 +10,7 @@ void init_bodies(Body *bodies, int n_bodies) {
   bodies[0].vx = 0.0f;
   bodies[0].vy = 0.0f;
   bodies[0].mass = 5000.0f;
-  bodies[0].radius = 8.0f;
+  bodies[0].radius = 12.0f;
   bodies[0].r = 255; 
   bodies[0].g = 220; 
   bodies[0].b = 100;
@@ -29,7 +29,7 @@ void init_bodies(Body *bodies, int n_bodies) {
 
     // Tamaño
     bodies[i].mass = 1.0f + ((float)rand() / RAND_MAX) * 4.0f;
-    bodies[i].radius = 1.5f + bodies[i].mass * 0.3f;
+    bodies[i].radius = 1.5f + bodies[i].mass * 1.0f;
 
     // Color
     bodies[i].r = rand() % 256;

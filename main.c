@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "screensaver.h"
+#include "render.h"
 
 int parse_args(int argc, char *argv[], int *n_bodies) {
   if (argc != 2) {
@@ -54,11 +55,26 @@ int main(int argc, char *argv[]) {
   srand(42);
   init_bodies(bodies, n);
 
-  for (int step = 0; step < 300; step++) {
+  RenderContext ctx;
+  if (!render_init(&ctx, "N-Body Screensaver", WIDTH, HEIGHT)) {
+    free(bodies);
+    free(ax);
+    free(ay);
+    return 1;
+  }
+
+  while (render_poll_events(&ctx)) {
     calculate_forces(bodies, n, ax, ay);
     update_bodies(bodies, n, ax, ay, dt);
-    printf("step %2d -> x=%.3f y=%.3f vx=%.3f vy=%.3f\n", step, bodies[1].x, bodies[1].y, bodies[1].vx, bodies[1].vy);
+
+    render_clear(&ctx, 10, 10, 20);
+    render_bodies(&ctx, bodies, n);
+    render_present(&ctx);
+
+    render_update_fps(&ctx);
   }
+
+  render_shutdown(&ctx);
 
   free(bodies);
   free(ax);
