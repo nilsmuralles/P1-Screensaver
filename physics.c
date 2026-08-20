@@ -3,6 +3,10 @@
 #include <stdlib.h>
 #include "screensaver.h"
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 void init_bodies(Body *bodies, int n_bodies) {
   // Sol
   bodies[0].x = WIDTH / 2.0f;
