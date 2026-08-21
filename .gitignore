@@ -22,3 +22,5 @@ core.*
 Thumbs.db
 
 compile_flags.txt
+
+raylib/
