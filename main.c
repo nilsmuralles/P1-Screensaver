@@ -55,6 +55,8 @@ int main(int argc, char *argv[]) {
   srand(42);
   init_bodies(bodies, n);
 
+  float explosion_threshold = SUN_BASE_MASS + total_planet_mass(bodies, n) * EXPLOSION_ABSORPTION_FRACTION;
+
   RenderContext ctx;
   if (!render_init(&ctx, "N-Body Screensaver", WIDTH, HEIGHT)) {
     free(bodies);
@@ -63,15 +65,49 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
+  enum SimState state = STATE_RUNNING;
+  int active_n = n;
+  int explosion_timer = 0;
+  int frame_count = 0;
+
   while (render_poll_events(&ctx)) {
-    calculate_forces(bodies, n, ax, ay);
-    update_bodies(bodies, n, ax, ay, dt);
+    if (state == STATE_RUNNING) {
+      calculate_forces(bodies, active_n, ax, ay);
+      update_bodies(bodies, active_n, ax, ay, dt);
+      active_n = check_and_merge_collisions(bodies, active_n);
+
+      if (frame_count % 30 == 0) {
+        printf("frame %d: active_n=%d sun_mass=%.1f sun_radius=%.2f\n",
+               frame_count, active_n, bodies[0].mass, bodies[0].radius);
+      }
+
+      if (should_explode(bodies, active_n, explosion_threshold)) {
+        printf("EXPLOSION en frame %d (active_n=%d, sun_mass=%.1f)\n",
+               frame_count, active_n, bodies[0].mass);
+        state = STATE_EXPLODING;
+        explosion_timer = EXPLOSION_DURATION_FRAMES;
+      }
+    } else { 
+      explosion_timer--;
+      if (explosion_timer <= 0) {
+        init_bodies(bodies, n);
+        active_n = n;
+        explosion_threshold = SUN_BASE_MASS + total_planet_mass(bodies, n) * EXPLOSION_ABSORPTION_FRACTION;
+        state = STATE_RUNNING;
+        printf("REINICIO en frame %d\n", frame_count);
+      }
+    }
 
     render_clear(&ctx, 10, 10, 20);
-    render_bodies(&ctx, bodies, n);
+    if (state == STATE_RUNNING) {
+      render_bodies(&ctx, bodies, active_n);
+    } else {
+      render_explosion_effect(&ctx, bodies, active_n, explosion_timer);
+    }
     render_present(&ctx);
 
     render_update_fps(&ctx);
+    frame_count++;
   }
 
   render_shutdown(&ctx);

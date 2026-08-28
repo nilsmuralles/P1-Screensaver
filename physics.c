@@ -13,9 +13,9 @@ void init_bodies(Body *bodies, int n_bodies) {
   bodies[0].y = HEIGHT / 2.0f;
   bodies[0].vx = 0.0f;
   bodies[0].vy = 0.0f;
-  bodies[0].mass = 5000.0f;
-  bodies[0].radius = 12.0f;
-  bodies[0].r = 255; 
+  bodies[0].mass = SUN_BASE_MASS;
+  bodies[0].radius = SUN_BASE_RADIUS;
+  bodies[0].r = 255;
   bodies[0].g = 220; 
   bodies[0].b = 100;
 
@@ -26,8 +26,9 @@ void init_bodies(Body *bodies, int n_bodies) {
     bodies[i].x = WIDTH / 2.0f + dist * cosf(angle);
     bodies[i].y = HEIGHT / 2.0f + dist * sinf(angle);
     
-    // Velocidad
-    float speed = sqrtf(CONST_G * bodies[0].mass / dist);
+    float circular_speed = sqrtf(CONST_G * bodies[0].mass / dist);
+    float speed_factor = 0.5f + ((float)rand() / RAND_MAX) * 0.4f; // 0.5 - 0.9
+    float speed = circular_speed * speed_factor;
     bodies[i].vx = -sinf(angle) * speed;
     bodies[i].vy =  cosf(angle) * speed;
 
@@ -68,11 +69,50 @@ void calculate_forces(Body *bodies, int n_bodies, float *ax, float *ay) {
 }
 
 void update_bodies(Body *bodies, int n_bodies, float *ax, float *ay, float dt) {
-  for (int i = 0; i < n_bodies; i++) {
+  for (int i = 1; i < n_bodies; i++) {
     bodies[i].vx += ax[i] * dt;
     bodies[i].vy += ay[i] * dt;
 
     bodies[i].x += bodies[i].vx * dt;
     bodies[i].y += bodies[i].vy * dt;
   }
+}
+
+int check_and_merge_collisions(Body *bodies, int n_active) {
+  int i = 1; 
+
+  while (i < n_active) {
+    float dx = bodies[i].x - bodies[0].x;
+    float dy = bodies[i].y - bodies[0].y;
+    float dist2 = dx * dx + dy * dy;
+
+    float merge_dist = (bodies[0].radius + bodies[i].radius) * MERGE_DISTANCE_FACTOR;
+
+    if (dist2 <= merge_dist * merge_dist) {
+      bodies[0].mass += bodies[i].mass;
+
+      bodies[i] = bodies[n_active - 1]; 
+      n_active--;
+    } else {
+      i++;
+    }
+  }
+
+  bodies[0].radius = SUN_BASE_RADIUS * cbrtf(bodies[0].mass / SUN_BASE_MASS);
+
+  return n_active;
+}
+
+float total_planet_mass(const Body *bodies, int n_active) {
+  float total = 0.0f;
+  for (int i = 1; i < n_active; i++) {
+    total += bodies[i].mass;
+  }
+  return total;
+}
+
+int should_explode(const Body *bodies, int n_active, float mass_threshold) {
+  if (bodies[0].mass >= mass_threshold) return 1;
+  if (n_active <= 1) return 1;
+  return 0;
 }

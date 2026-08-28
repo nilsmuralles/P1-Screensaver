@@ -2,7 +2,6 @@
 #include "raylib.h"
 #include "render.h"
 
-// Valor por defecto de estela
 #define DEFAULT_TRAIL_ALPHA 40
 
 int render_init(RenderContext *ctx, const char *title, int width, int height) {
@@ -14,6 +13,8 @@ int render_init(RenderContext *ctx, const char *title, int width, int height) {
   if (!IsWindowReady()) {
     return 0;
   }
+
+  SetTargetFPS(TARGET_FPS);
 
   ctx->width  = width;
   ctx->height = height;
@@ -62,17 +63,36 @@ void render_bodies(RenderContext *ctx, const Body *bodies, int n_bodies) {
   }
 }
 
+void render_explosion_effect(RenderContext *ctx, const Body *bodies, int n_active, int frames_remaining) {
+  (void)n_active;
+
+  float progress = 1.0f - ((float)frames_remaining / (float)EXPLOSION_DURATION_FRAMES);
+  if (progress < 0.0f) progress = 0.0f;
+  if (progress > 1.0f) progress = 1.0f;
+
+  Vector2 center = { bodies[0].x, bodies[0].y };
+  unsigned char alpha = (unsigned char)(255.0f * (1.0f - progress));
+
+  float core_radius = bodies[0].radius * (1.0f - progress) + 4.0f;
+  Color core = (Color){ 255, 240, 200, alpha };
+  DrawCircleV(center, core_radius, core);
+
+  float max_radius = ctx->width * 0.6f;
+  float ring_radius = bodies[0].radius + progress * max_radius;
+  Color ring = (Color){ 255, 140, 30, alpha };
+  DrawRing(center, ring_radius * 0.85f, ring_radius, 0, 360, 64, ring);
+}
+
 void render_present(RenderContext *ctx) {
   (void)ctx;
 
   DrawRectangle(5, 5, 95, 25, (Color){ 0, 0, 0, 160 }); // fondo para legibilidad
-  DrawFPS(10, 10); // helper de raylib
+  DrawFPS(10, 10); 
 
   EndDrawing();
 }
 
 void render_update_fps(RenderContext *ctx) {
-  // Solo actualiza el estado interno para quien consulte render_get_fps()
   ctx->fps_current = (double)GetFPS();
 }
 
