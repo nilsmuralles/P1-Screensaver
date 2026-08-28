@@ -14,8 +14,6 @@ int render_init(RenderContext *ctx, const char *title, int width, int height) {
     return 0;
   }
 
-  SetTargetFPS(TARGET_FPS);
-
   ctx->width  = width;
   ctx->height = height;
   ctx->running = 1;
@@ -98,6 +96,11 @@ void render_update_fps(RenderContext *ctx) {
 
 double render_get_fps(const RenderContext *ctx) {
   return ctx->fps_current;
+}
+
+float render_get_delta_time(RenderContext *ctx) {
+  (void)ctx;
+  return GetFrameTime();
 }
 
 void render_set_trail(RenderContext *ctx, unsigned char alpha) {

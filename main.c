@@ -50,8 +50,6 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  float dt = 1.0f;
-
   srand(42);
   init_bodies(bodies, n);
 
@@ -71,6 +69,8 @@ int main(int argc, char *argv[]) {
   int frame_count = 0;
 
   while (render_poll_events(&ctx)) {
+    float dt = render_get_delta_time(&ctx) * SIM_TIME_SCALE;
+
     if (state == STATE_RUNNING) {
       calculate_forces(bodies, active_n, ax, ay);
       update_bodies(bodies, active_n, ax, ay, dt);

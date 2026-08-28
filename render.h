@@ -46,6 +46,11 @@ void render_present(RenderContext *ctx);
 // Actualiza el FPS mostrado en el titulo de la ventana 
 void render_update_fps(RenderContext *ctx);
 
+// Tiempo real transcurrido desde el frame anterior, en segundos (wrapea
+// GetFrameTime() de raylib). Pensado para usarse como base de dt en el
+// loop de simulacion, sin que main.c necesite conocer raylib.
+float render_get_delta_time(RenderContext *ctx);
+
 // Ultimo valor de FPS calculado
 double render_get_fps(const RenderContext *ctx);
 

@@ -6,6 +6,8 @@
 #define MIN_FPS 30
 #define TARGET_FPS 60
 
+#define SIM_TIME_SCALE 60.0f //Se usa para ajustar a 60 fotogramas visibles
+
 #define CONST_G 6.674e-2
 #define EPSILON 2.0f
 #define MAX_BODIES 100000
