@@ -4,9 +4,14 @@
 #define WIDTH 640
 #define HEIGHT 480
 #define MIN_FPS 30
-#define TARGET_FPS 60
+#define TARGET_FPS 60 // referencia historica; ya no se usa para limitar FPS (ver decision 6.3 del plan)
 
-#define SIM_TIME_SCALE 60.0f //Se usa para ajustar a 60 fotogramas visibles
+// Escala de tiempo simulado por segundo real. Con dt = GetFrameTime() * SIM_TIME_SCALE,
+// a exactamente 60 FPS reales dt queda numericamente igual al dt=1.0f fijo que se usaba
+// antes, asi que las orbitas se ven igual que en la calibracion original, pero ahora
+// avanzan a ritmo de tiempo real (frame-rate independiente) en vez de "1 tick por frame".
+// Por calibrar visualmente junto al equipo si se ajustan CONST_G/SUN_BASE_MASS.
+#define SIM_TIME_SCALE 60.0f
 
 #define CONST_G 6.674e-2
 #define EPSILON 2.0f
@@ -20,7 +25,9 @@
 #define EXPLOSION_DURATION_FRAMES 60      // duracion del efecto visual antes de reiniciar, por calibrar
 
 enum ExecMode {
-  SECUENCIAL
+  SECUENCIAL,
+  ESPACIAL
+
 };
 
 enum SimState {
@@ -39,7 +46,7 @@ typedef struct {
 void init_bodies(Body *bodies, int n_boides);
 void calculate_forces(Body *bodies, int n_bodies, float *ax, float *ay);
 void update_bodies(Body *bodies, int n_bodies, float *ax, float *ay, float dt);
-int parse_args(int argc, char *argv[], int *n_bodies);
+int parse_args(int argc, char *argv[], int *n_bodies, enum ExecMode *mode, int *schedule_kind);
 int check_and_merge_collisions(Body *bodies, int n_active);
 int should_explode(const Body *bodies, int n_active, float mass_threshold);
 float total_planet_mass(const Body *bodies, int n_active);

@@ -15,7 +15,7 @@ else
     OMP_LDFLAGS := -fopenmp
 endif
 
-SRCS = main.c physics.c render.c
+SRCS = main.c physics.c render.c spatial.c
 OBJS = $(SRCS:.c=.o)
 TARGET = main
 
@@ -36,44 +36,35 @@ ifeq ($(strip $(RAYLIB_LDFLAGS)),)
     RAYLIB_LDFLAGS := $(RAYLIB_LDFLAGS_FALLBACK)
 endif
 
-DEMO_SRCS = render.c render_demo.c
-DEMO_OBJS = $(DEMO_SRCS:.c=.o)
-DEMO_TARGET = render_demo
-
 $(TARGET): $(OBJS)
-	$(CC) $(OBJS) -o $(TARGET) $(LDFLAGS) $(RAYLIB_LDFLAGS)
+	$(CC) $(OBJS) -o $(TARGET) $(LDFLAGS) $(RAYLIB_LDFLAGS) $(OMP_LDFLAGS)
 
 %.o: %.c screensaver.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Los .o que usan raylib necesitan sus propios flags de include/link;
 # estas reglas explicitas tienen prioridad sobre el patron de arriba.
-main.o: main.c render.h screensaver.h
+main.o: main.c render.h screensaver.h spatial.h
 	$(CC) $(CFLAGS) $(RAYLIB_CFLAGS) -c main.c -o main.o
 
 render.o: render.c render.h screensaver.h
 	$(CC) $(CFLAGS) $(RAYLIB_CFLAGS) -c render.c -o render.o
-
-render_demo.o: render_demo.c render.h screensaver.h
-	$(CC) $(CFLAGS) $(RAYLIB_CFLAGS) -c render_demo.c -o render_demo.o
-
-# make render_demo: compila el binario de prueba del modulo de render
-# (ventana + cuerpos "mock" rebotando), sin depender de main.c/physics.c.
-$(DEMO_TARGET): $(DEMO_OBJS)
-	$(CC) $(DEMO_OBJS) -o $(DEMO_TARGET) $(LDFLAGS) $(RAYLIB_LDFLAGS)
 
 # make omp: mismo build pero con OpenMP habilitado (para cuando haya #pragma omp)
 omp: CFLAGS += $(OMP_CFLAGS)
 omp: LDFLAGS += $(OMP_LDFLAGS)
 omp: $(TARGET)
 
+# spatial.o siempre se compila con flags de OpenMP (independiente del
+# target 'omp' de arriba), porque su fallback sin _OPENMP es solo un
+# camino de compatibilidad, no el modo de uso real.
+spatial.o: spatial.c spatial.h screensaver.h
+	$(CC) $(CFLAGS) $(OMP_CFLAGS) -c spatial.c -o spatial.o
+
 run: $(TARGET)
 	./$(TARGET)
 
-run-demo: $(DEMO_TARGET)
-	./$(DEMO_TARGET)
-
 clean:
-	rm -f $(OBJS) $(DEMO_OBJS) $(TARGET) $(DEMO_TARGET)
+	rm -f $(OBJS) $(TARGET)
 
-.PHONY: run run-demo clean omp render_demo
+.PHONY: run clean omp

@@ -1,12 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "screensaver.h"
 #include "render.h"
+#include "spatial.h"
 
-int parse_args(int argc, char *argv[], int *n_bodies) {
-  if (argc != 2) {
-    fprintf(stderr, "Uso: %s <N>\n", argv[0]);
-    fprintf(stderr, "  N: cantidad de cuerpos a simular (incluye el sol, minimo 2)\n");
+
+int parse_args(int argc, char *argv[], int *n_bodies, enum ExecMode *mode, int *schedule_kind) {
+  if (argc < 2 || argc > 4) {
     return 0;
   }
 
@@ -29,12 +30,45 @@ int parse_args(int argc, char *argv[], int *n_bodies) {
   }
 
   *n_bodies = (int)n;
+
+  *mode = SECUENCIAL;
+  if (argc >= 3) {
+    if (strcmp(argv[2], "seq") == 0 || strcmp(argv[2], "secuencial") == 0) {
+      *mode = SECUENCIAL;
+    } else if (strcmp(argv[2], "espacial") == 0 || strcmp(argv[2], "spatial") == 0) {
+      *mode = ESPACIAL;
+    } else {
+      fprintf(stderr, "Error: modo '%s' invalido (usar seq | espacial)\n", argv[2]);
+      return 0;
+    }
+  }
+
+  *schedule_kind = 0;
+  if (argc == 4) {
+    if (*mode != ESPACIAL) {
+      fprintf(stderr, "Error: 'schedule' solo aplica con modo=espacial\n");
+      return 0;
+    }
+    if (strcmp(argv[3], "static") == 0) {
+      *schedule_kind = 0;
+    } else if (strcmp(argv[3], "dynamic") == 0) {
+      *schedule_kind = 1;
+    } else if (strcmp(argv[3], "guided") == 0) {
+      *schedule_kind = 2;
+    } else {
+      fprintf(stderr, "Error: schedule '%s' invalido (usar static | dynamic | guided)\n", argv[3]);
+      return 0;
+    }
+  }
+
   return 1;
 }
 
 int main(int argc, char *argv[]) {
   int n;
-  if (!parse_args(argc, argv, &n)) {
+  enum ExecMode mode;
+  int schedule_kind;
+  if (!parse_args(argc, argv, &n, &mode, &schedule_kind)) {
     return 1;
   }
 
@@ -50,6 +84,27 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
+
+  SpatialGrid grid;
+  int grid_ready = 0;
+  if (mode == ESPACIAL) {
+    if (!spatial_grid_init(&grid, n)) {
+      fprintf(stderr, "Error: no se pudo reservar el grid espacial para %d cuerpos\n", n);
+      free(bodies);
+      free(ax);
+      free(ay);
+      return 1;
+    }
+    grid_ready = 1;
+    SpatialScheduleKind kind = SPATIAL_SCHEDULE_STATIC;
+    if (schedule_kind == 1) kind = SPATIAL_SCHEDULE_DYNAMIC;
+    else if (schedule_kind == 2) kind = SPATIAL_SCHEDULE_GUIDED;
+    spatial_set_schedule(kind, 0);
+    printf("Modo: ESTRATEGIA_2_ESPACIAL, schedule=%s\n", spatial_schedule_name());
+  } else {
+    printf("Modo: SECUENCIAL\n");
+  }
+
   srand(42);
   init_bodies(bodies, n);
 
@@ -57,6 +112,7 @@ int main(int argc, char *argv[]) {
 
   RenderContext ctx;
   if (!render_init(&ctx, "N-Body Screensaver", WIDTH, HEIGHT)) {
+    if (grid_ready) spatial_grid_free(&grid);
     free(bodies);
     free(ax);
     free(ay);
@@ -72,7 +128,12 @@ int main(int argc, char *argv[]) {
     float dt = render_get_delta_time(&ctx) * SIM_TIME_SCALE;
 
     if (state == STATE_RUNNING) {
-      calculate_forces(bodies, active_n, ax, ay);
+      if (mode == ESPACIAL) {
+        spatial_grid_build(&grid, bodies, active_n);
+        calculate_forces_spatial(bodies, active_n, ax, ay, &grid);
+      } else {
+        calculate_forces(bodies, active_n, ax, ay);
+      }
       update_bodies(bodies, active_n, ax, ay, dt);
       active_n = check_and_merge_collisions(bodies, active_n);
 
@@ -112,6 +173,7 @@ int main(int argc, char *argv[]) {
 
   render_shutdown(&ctx);
 
+  if (grid_ready) spatial_grid_free(&grid);
   free(bodies);
   free(ax);
   free(ay);
