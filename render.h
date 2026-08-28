@@ -3,6 +3,10 @@
 
 #include "screensaver.h"
 
+// Detalles de shaders ocultos detras de un puntero opaco:
+// render.h no debe filtrar tipos de raylib
+typedef struct RenderShaderState RenderShaderState;
+
 typedef struct {
   int width;
   int height;
@@ -16,6 +20,8 @@ typedef struct {
   unsigned char trail_alpha;
 
   double fps_current;
+
+  RenderShaderState *shaders; // NULL si los shaders no se pudieron inicializar
 } RenderContext;
 
 // Inicializa la ventana raylib. Devuelve 1 en exito, 0 en error

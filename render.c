@@ -1,8 +1,87 @@
 #include <math.h>
+#include <stdlib.h>
 #include "raylib.h"
 #include "render.h"
+#include "render_shaders.h"
 
-#define DEFAULT_TRAIL_ALPHA 40
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+#define DEFAULT_TRAIL_ALPHA 150
+
+
+#define SHADOW_DARKEN_FACTOR 0.15f
+#define SHADOW_MAX_ALPHA 235
+#define SHADOW_SEGMENTS 24
+
+#define SHADOW_RADIUS_OVERSHOOT 1.08f
+#define SHADOW_FEATHER_STEPS 5
+#define SHADOW_FEATHER_DEG 34.0f
+
+
+#define STAR_DENSITY 0.018f
+#define STAR_TWINKLE_SPEED 2.2f
+#define POST_CONTRAST 1.18f
+#define POST_SATURATION 1.12f
+#define POST_VIGNETTE_STRENGTH 0.35f
+
+struct RenderShaderState {
+  RenderTexture2D scene;
+  Shader star_shader;
+  int loc_star_time;
+  Shader post_shader;
+};
+
+static RenderShaderState *shader_state_init(int width, int height) {
+  RenderShaderState *st = malloc(sizeof(RenderShaderState));
+  if (st == NULL) return NULL;
+
+  st->scene = LoadRenderTexture(width, height);
+  st->star_shader = LoadShaderFromMemory(NULL, STAR_FIELD_FS);
+  st->post_shader = LoadShaderFromMemory(NULL, POSTPROCESS_FS);
+
+  if (st->scene.id == 0 || st->star_shader.id == 0 || st->post_shader.id == 0) {
+    TraceLog(LOG_WARNING, "No se pudieron inicializar los shaders; se sigue sin ellos.");
+    if (st->scene.id != 0) UnloadRenderTexture(st->scene);
+    if (st->star_shader.id != 0) UnloadShader(st->star_shader);
+    if (st->post_shader.id != 0) UnloadShader(st->post_shader);
+    free(st);
+    return NULL;
+  }
+
+  st->loc_star_time = GetShaderLocation(st->star_shader, "u_time");
+  int loc_star_res  = GetShaderLocation(st->star_shader, "u_resolution");
+  int loc_star_dens = GetShaderLocation(st->star_shader, "u_starDensity");
+  int loc_star_twk  = GetShaderLocation(st->star_shader, "u_twinkleSpeed");
+
+  Vector2 resolution = { (float)width, (float)height };
+  float density = STAR_DENSITY;
+  float twinkle = STAR_TWINKLE_SPEED;
+  SetShaderValue(st->star_shader, loc_star_res, &resolution, SHADER_UNIFORM_VEC2);
+  SetShaderValue(st->star_shader, loc_star_dens, &density, SHADER_UNIFORM_FLOAT);
+  SetShaderValue(st->star_shader, loc_star_twk, &twinkle, SHADER_UNIFORM_FLOAT);
+
+  int loc_contrast  = GetShaderLocation(st->post_shader, "u_contrast");
+  int loc_saturation = GetShaderLocation(st->post_shader, "u_saturation");
+  int loc_vignette  = GetShaderLocation(st->post_shader, "u_vignetteStrength");
+  float contrast = POST_CONTRAST;
+  float saturation = POST_SATURATION;
+  float vignette = POST_VIGNETTE_STRENGTH;
+  SetShaderValue(st->post_shader, loc_contrast, &contrast, SHADER_UNIFORM_FLOAT);
+  SetShaderValue(st->post_shader, loc_saturation, &saturation, SHADER_UNIFORM_FLOAT);
+  SetShaderValue(st->post_shader, loc_vignette, &vignette, SHADER_UNIFORM_FLOAT);
+
+  return st;
+}
+
+static void shader_state_free(RenderShaderState *st) {
+  if (st == NULL) return;
+  UnloadRenderTexture(st->scene);
+  UnloadShader(st->star_shader);
+  UnloadShader(st->post_shader);
+  free(st);
+}
 
 int render_init(RenderContext *ctx, const char *title, int width, int height) {
 
@@ -25,11 +104,14 @@ int render_init(RenderContext *ctx, const char *title, int width, int height) {
 
   ctx->fps_current = 0.0;
 
+  ctx->shaders = shader_state_init(width, height);
+
   return 1;
 }
 
 void render_shutdown(RenderContext *ctx) {
-  (void)ctx;
+  shader_state_free(ctx->shaders);
+  ctx->shaders = NULL;
   CloseWindow();
 }
 
@@ -46,18 +128,63 @@ void render_clear(RenderContext *ctx, unsigned char r, unsigned char g, unsigned
   ctx->bg_g = g;
   ctx->bg_b = b;
 
-  BeginDrawing();
+  if (ctx->shaders != NULL) {
+    BeginTextureMode(ctx->shaders->scene);
+  } else {
+    BeginDrawing();
+  }
 
   Color bg = (Color){ r, g, b, ctx->trail_alpha };
   DrawRectangle(0, 0, ctx->width, ctx->height, bg);
+
+  if (ctx->shaders != NULL) {
+    float t = (float)GetTime();
+    SetShaderValue(ctx->shaders->star_shader, ctx->shaders->loc_star_time, &t, SHADER_UNIFORM_FLOAT);
+
+    BeginShaderMode(ctx->shaders->star_shader);
+    DrawRectangle(0, 0, ctx->width, ctx->height, WHITE);
+    EndShaderMode();
+  }
+}
+
+static Color darken_color(Color c, float factor) {
+  return (Color){
+    (unsigned char)(c.r * factor),
+    (unsigned char)(c.g * factor),
+    (unsigned char)(c.b * factor),
+    c.a
+  };
 }
 
 void render_bodies(RenderContext *ctx, const Body *bodies, int n_bodies) {
   (void)ctx;
+  const Body *sun = &bodies[0];
+
   for (int i = 0; i < n_bodies; i++) {
     const Body *body = &bodies[i];
     Color color = (Color){ body->r, body->g, body->b, 255 };
     DrawCircle((int)roundf(body->x), (int)roundf(body->y), body->radius, color);
+
+    if (i == 0) continue; 
+
+    float dx = body->x - sun->x;
+    float dy = body->y - sun->y;
+    if (dx == 0.0f && dy == 0.0f) continue;
+
+
+    float away_from_sun_deg = atan2f(dy, dx) * (180.0f / (float)M_PI);
+
+    Color shadow_base = darken_color(color, SHADOW_DARKEN_FACTOR);
+    Vector2 center = { body->x, body->y };
+    float shadow_radius = body->radius * SHADOW_RADIUS_OVERSHOOT;
+
+    for (int step = 0; step < SHADOW_FEATHER_STEPS; step++) {
+      float t = (float)(step + 1) / (float)SHADOW_FEATHER_STEPS;
+      float half_span = 90.0f - SHADOW_FEATHER_DEG * (1.0f - t);
+      Color shadow = shadow_base;
+      shadow.a = (unsigned char)(SHADOW_MAX_ALPHA * t);
+      DrawCircleSector(center, shadow_radius, away_from_sun_deg - half_span, away_from_sun_deg + half_span, SHADOW_SEGMENTS, shadow);
+    }
   }
 }
 
@@ -82,10 +209,21 @@ void render_explosion_effect(RenderContext *ctx, const Body *bodies, int n_activ
 }
 
 void render_present(RenderContext *ctx) {
-  (void)ctx;
+  if (ctx->shaders != NULL) {
+    EndTextureMode();
+
+    BeginDrawing();
+    ClearBackground(BLACK);
+
+    BeginShaderMode(ctx->shaders->post_shader);
+
+    Rectangle src = { 0, 0, (float)ctx->shaders->scene.texture.width, -(float)ctx->shaders->scene.texture.height };
+    DrawTextureRec(ctx->shaders->scene.texture, src, (Vector2){ 0, 0 }, WHITE);
+    EndShaderMode();
+  }
 
   DrawRectangle(5, 5, 95, 25, (Color){ 0, 0, 0, 160 }); // fondo para legibilidad
-  DrawFPS(10, 10); 
+  DrawFPS(10, 10);
 
   EndDrawing();
 }
