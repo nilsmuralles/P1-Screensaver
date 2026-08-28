@@ -12,12 +12,12 @@ static int clamp_int(int v, int lo, int hi) {
   return v;
 }
 
-static int cell_index_of(const Body *b, float cell_width, float cell_height) {
-  int col = (int)(b->x / cell_width);
-  int row = (int)(b->y / cell_height);
-  col = clamp_int(col, 0, SPATIAL_GRID_COLS - 1);
-  row = clamp_int(row, 0, SPATIAL_GRID_ROWS - 1);
-  return row * SPATIAL_GRID_COLS + col;
+static int cell_index_of(const SpatialGrid *grid, const Body *b) {
+  int col = (int)((b->x - grid->origin_x) / grid->cell_width);
+  int row = (int)((b->y - grid->origin_y) / grid->cell_height);
+  col = clamp_int(col, 0, grid->grid_cols - 1);
+  row = clamp_int(row, 0, grid->grid_rows - 1);
+  return row * grid->grid_cols + col;
 }
 
 int spatial_grid_init(SpatialGrid *grid, int max_bodies) {
@@ -26,9 +26,22 @@ int spatial_grid_init(SpatialGrid *grid, int max_bodies) {
     return 0;
   }
   grid->capacity = max_bodies;
-  grid->cell_width  = (float)WIDTH  / (float)SPATIAL_GRID_COLS;
-  grid->cell_height = (float)HEIGHT / (float)SPATIAL_GRID_ROWS;
-  for (int c = 0; c <= SPATIAL_GRID_CELLS; c++) {
+
+  int target_cells = max_bodies / SPATIAL_BODIES_PER_CELL_TARGET;
+  if (target_cells < 1) target_cells = 1;
+  int side = (int)ceilf(sqrtf((float)target_cells));
+  side = clamp_int(side, 1, SPATIAL_MAX_GRID_COLS);
+
+  grid->grid_cols = side;
+  grid->grid_rows = clamp_int(side, 1, SPATIAL_MAX_GRID_ROWS);
+  grid->grid_cells = grid->grid_cols * grid->grid_rows;
+
+  grid->origin_x = 0.0f;
+  grid->origin_y = 0.0f;
+  grid->cell_width  = (float)WIDTH  / (float)grid->grid_cols;
+  grid->cell_height = (float)HEIGHT / (float)grid->grid_rows;
+
+  for (int c = 0; c <= grid->grid_cells; c++) {
     grid->cell_start[c] = 0;
   }
   return 1;
@@ -41,25 +54,43 @@ void spatial_grid_free(SpatialGrid *grid) {
 }
 
 void spatial_grid_build(SpatialGrid *grid, const Body *bodies, int n_bodies) {
-  int counts[SPATIAL_GRID_CELLS] = {0};
+  float min_x = bodies[0].x, max_x = bodies[0].x;
+  float min_y = bodies[0].y, max_y = bodies[0].y;
+  for (int i = 1; i < n_bodies; i++) {
+    if (bodies[i].x < min_x) min_x = bodies[i].x;
+    if (bodies[i].x > max_x) max_x = bodies[i].x;
+    if (bodies[i].y < min_y) min_y = bodies[i].y;
+    if (bodies[i].y > max_y) max_y = bodies[i].y;
+  }
+
+  const float PADDING = 4.0f;
+  float span_x = (max_x - min_x) + PADDING;
+  float span_y = (max_y - min_y) + PADDING;
+
+  grid->origin_x = min_x - PADDING * 0.5f;
+  grid->origin_y = min_y - PADDING * 0.5f;
+  grid->cell_width  = span_x / (float)grid->grid_cols;
+  grid->cell_height = span_y / (float)grid->grid_rows;
+
+  int counts[SPATIAL_MAX_GRID_CELLS] = {0};
 
   for (int i = 0; i < n_bodies; i++) {
-    int c = cell_index_of(&bodies[i], grid->cell_width, grid->cell_height);
+    int c = cell_index_of(grid, &bodies[i]);
     counts[c]++;
   }
 
   grid->cell_start[0] = 0;
-  for (int c = 0; c < SPATIAL_GRID_CELLS; c++) {
+  for (int c = 0; c < grid->grid_cells; c++) {
     grid->cell_start[c + 1] = grid->cell_start[c] + counts[c];
   }
 
-  int cursor[SPATIAL_GRID_CELLS];
-  for (int c = 0; c < SPATIAL_GRID_CELLS; c++) {
+  int cursor[SPATIAL_MAX_GRID_CELLS];
+  for (int c = 0; c < grid->grid_cells; c++) {
     cursor[c] = grid->cell_start[c];
   }
 
   for (int i = 0; i < n_bodies; i++) {
-    int c = cell_index_of(&bodies[i], grid->cell_width, grid->cell_height);
+    int c = cell_index_of(grid, &bodies[i]);
     grid->cell_bodies[cursor[c]] = i;
     cursor[c]++;
   }
@@ -98,7 +129,6 @@ const char *spatial_schedule_name(void) {
 #endif
 }
 
-
 static void accumulate_force(const Body *bodies, int n_bodies, int i, float *out_ax, float *out_ay) {
   float sum_ax = 0.0f;
   float sum_ay = 0.0f;
@@ -121,10 +151,11 @@ static void accumulate_force(const Body *bodies, int n_bodies, int i, float *out
   *out_ay = sum_ay;
 }
 
-void calculate_forces_spatial(const Body *bodies, int n_bodies, float *ax, float *ay, const SpatialGrid *grid) {
+void calculate_forces_spatial(const Body *bodies, int n_bodies,
+                               float *ax, float *ay, const SpatialGrid *grid) {
 #ifdef _OPENMP
   #pragma omp parallel for schedule(runtime)
-  for (int c = 0; c < SPATIAL_GRID_CELLS; c++) {
+  for (int c = 0; c < grid->grid_cells; c++) {
     int start = grid->cell_start[c];
     int end   = grid->cell_start[c + 1];
     for (int k = start; k < end; k++) {
@@ -133,7 +164,7 @@ void calculate_forces_spatial(const Body *bodies, int n_bodies, float *ax, float
     }
   }
 #else
-  for (int c = 0; c < SPATIAL_GRID_CELLS; c++) {
+  for (int c = 0; c < grid->grid_cells; c++) {
     int start = grid->cell_start[c];
     int end   = grid->cell_start[c + 1];
     for (int k = start; k < end; k++) {
