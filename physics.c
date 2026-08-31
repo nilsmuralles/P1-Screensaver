@@ -19,22 +19,24 @@ void init_bodies(Body *bodies, int n_bodies) {
   bodies[0].g = 220; 
   bodies[0].b = 100;
 
+  float min_orbit_dist = SUN_BASE_RADIUS * (MERGE_DISTANCE_FACTOR + 1.0f) + 20.0f;
+
   for (int i = 1; i < n_bodies; i++) { // Resto de cuerpos celestes
     // Posición
     float angle = ((float)rand() / RAND_MAX) * 2.0f * (float)M_PI;
-    float dist  = 30.0f + ((float)rand() / RAND_MAX) * (WIDTH / 2.0f - 30.0f);
+    float dist  = min_orbit_dist + ((float)rand() / RAND_MAX) * (WIDTH / 2.0f - min_orbit_dist);
     bodies[i].x = WIDTH / 2.0f + dist * cosf(angle);
     bodies[i].y = HEIGHT / 2.0f + dist * sinf(angle);
     
     float circular_speed = sqrtf(CONST_G * bodies[0].mass / dist);
-    float speed_factor = 0.5f + ((float)rand() / RAND_MAX) * 0.4f; // 0.5 - 0.9
+    float speed_factor = 0.5f + ((float)rand() / RAND_MAX) * 0.4f;
     float speed = circular_speed * speed_factor;
     bodies[i].vx = -sinf(angle) * speed;
     bodies[i].vy =  cosf(angle) * speed;
 
     // Tamaño
     bodies[i].mass = 1.0f + ((float)rand() / RAND_MAX) * 4.0f;
-    bodies[i].radius = 1.5f + bodies[i].mass * 1.0f;
+    bodies[i].radius = 2.0f + bodies[i].mass * 1.0f;
 
     // Color
     bodies[i].r = rand() % 256;

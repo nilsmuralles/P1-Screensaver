@@ -3,6 +3,7 @@
 #include "raylib.h"
 #include "render.h"
 #include "render_shaders.h"
+#include "corona.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -11,16 +12,18 @@
 #define DEFAULT_TRAIL_ALPHA 150
 
 
-#define SHADOW_DARKEN_FACTOR 0.15f
-#define SHADOW_MAX_ALPHA 235
+#define SHADOW_DARKEN_FACTOR 0.45f
+#define SHADOW_MAX_ALPHA 130
 #define SHADOW_SEGMENTS 24
 
 #define SHADOW_RADIUS_OVERSHOOT 1.08f
-#define SHADOW_FEATHER_STEPS 5
-#define SHADOW_FEATHER_DEG 34.0f
+#define SHADOW_FEATHER_STEPS 8
+#define SHADOW_FEATHER_DEG 50.0f
+
+#define CORONA_SCREEN_SCALE 4.5f
 
 
-#define STAR_DENSITY 0.018f
+#define STAR_DENSITY 0.05f
 #define STAR_TWINKLE_SPEED 2.2f
 #define POST_CONTRAST 1.18f
 #define POST_SATURATION 1.12f
@@ -31,7 +34,27 @@ struct RenderShaderState {
   Shader star_shader;
   int loc_star_time;
   Shader post_shader;
+
+  CoronaBuffer corona;
+  Texture2D corona_tex;
 };
+
+static int corona_texture_init(struct RenderShaderState *st) {
+  if (!corona_init(&st->corona)) return 0;
+
+  corona_generate(&st->corona, 0.0f);
+
+  Image img = {
+    .data = st->corona.pixels,
+    .width = CORONA_TEX_SIZE,
+    .height = CORONA_TEX_SIZE,
+    .mipmaps = 1,
+    .format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8
+  };
+  st->corona_tex = LoadTextureFromImage(img);
+
+  return st->corona_tex.id != 0;
+}
 
 static RenderShaderState *shader_state_init(int width, int height) {
   RenderShaderState *st = malloc(sizeof(RenderShaderState));
@@ -40,12 +63,15 @@ static RenderShaderState *shader_state_init(int width, int height) {
   st->scene = LoadRenderTexture(width, height);
   st->star_shader = LoadShaderFromMemory(NULL, STAR_FIELD_FS);
   st->post_shader = LoadShaderFromMemory(NULL, POSTPROCESS_FS);
+  int corona_ok = corona_texture_init(st);
 
-  if (st->scene.id == 0 || st->star_shader.id == 0 || st->post_shader.id == 0) {
+  if (st->scene.id == 0 || st->star_shader.id == 0 || st->post_shader.id == 0 || !corona_ok) {
     TraceLog(LOG_WARNING, "No se pudieron inicializar los shaders; se sigue sin ellos.");
     if (st->scene.id != 0) UnloadRenderTexture(st->scene);
     if (st->star_shader.id != 0) UnloadShader(st->star_shader);
     if (st->post_shader.id != 0) UnloadShader(st->post_shader);
+    if (st->corona_tex.id != 0) UnloadTexture(st->corona_tex);
+    corona_free(&st->corona);
     free(st);
     return NULL;
   }
@@ -80,6 +106,8 @@ static void shader_state_free(RenderShaderState *st) {
   UnloadRenderTexture(st->scene);
   UnloadShader(st->star_shader);
   UnloadShader(st->post_shader);
+  UnloadTexture(st->corona_tex);
+  corona_free(&st->corona);
   free(st);
 }
 
@@ -156,6 +184,24 @@ static Color darken_color(Color c, float factor) {
   };
 }
 
+void render_sun_corona(RenderContext *ctx, const Body *bodies) {
+  if (ctx->shaders == NULL) return;
+
+  float t = (float)GetTime();
+  corona_generate(&ctx->shaders->corona, t);
+  UpdateTexture(ctx->shaders->corona_tex, ctx->shaders->corona.pixels);
+
+  const Body *sun = &bodies[0];
+  float corona_size = sun->radius * CORONA_SCREEN_SCALE;
+
+  Rectangle src = { 0, 0, (float)CORONA_TEX_SIZE, (float)CORONA_TEX_SIZE };
+  Rectangle dst = { sun->x - corona_size / 2.0f, sun->y - corona_size / 2.0f, corona_size, corona_size };
+
+  BeginBlendMode(BLEND_ADDITIVE);
+  DrawTexturePro(ctx->shaders->corona_tex, src, dst, (Vector2){ 0, 0 }, 0.0f, WHITE);
+  EndBlendMode();
+}
+
 void render_bodies(RenderContext *ctx, const Body *bodies, int n_bodies) {
   (void)ctx;
   const Body *sun = &bodies[0];
@@ -188,10 +234,10 @@ void render_bodies(RenderContext *ctx, const Body *bodies, int n_bodies) {
   }
 }
 
-void render_explosion_effect(RenderContext *ctx, const Body *bodies, int n_active, int frames_remaining) {
+void render_explosion_effect(RenderContext *ctx, const Body *bodies, int n_active, float seconds_remaining) {
   (void)n_active;
 
-  float progress = 1.0f - ((float)frames_remaining / (float)EXPLOSION_DURATION_FRAMES);
+  float progress = 1.0f - (seconds_remaining / EXPLOSION_DURATION_SECONDS);
   if (progress < 0.0f) progress = 0.0f;
   if (progress > 1.0f) progress = 1.0f;
 

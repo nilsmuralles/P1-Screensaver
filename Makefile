@@ -15,7 +15,7 @@ else
     OMP_LDFLAGS := -fopenmp
 endif
 
-SRCS = main.c physics.c render.c spatial.c
+SRCS = main.c physics.c render.c spatial.c corona.c
 OBJS = $(SRCS:.c=.o)
 TARGET = main
 
@@ -47,7 +47,7 @@ $(TARGET): $(OBJS)
 main.o: main.c render.h screensaver.h spatial.h
 	$(CC) $(CFLAGS) $(RAYLIB_CFLAGS) -c main.c -o main.o
 
-render.o: render.c render.h screensaver.h
+render.o: render.c render.h screensaver.h corona.h render_shaders.h
 	$(CC) $(CFLAGS) $(RAYLIB_CFLAGS) -c render.c -o render.o
 
 # make omp: mismo build pero con OpenMP habilitado (para cuando haya #pragma omp)
@@ -60,6 +60,9 @@ omp: $(TARGET)
 # camino de compatibilidad, no el modo de uso real.
 spatial.o: spatial.c spatial.h screensaver.h
 	$(CC) $(CFLAGS) $(OMP_CFLAGS) -c spatial.c -o spatial.o
+
+corona.o: corona.c corona.h
+	$(CC) $(CFLAGS) $(OMP_CFLAGS) -c corona.c -o corona.o
 
 run: $(TARGET)
 	./$(TARGET)

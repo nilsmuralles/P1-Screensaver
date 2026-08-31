@@ -40,11 +40,9 @@ void render_clear(RenderContext *ctx, unsigned char r, unsigned char g, unsigned
 // Dibuja el arreglo de cuerpos como circulos rellenos usando su color/radio
 void render_bodies(RenderContext *ctx, const Body *bodies, int n_bodies);
 
-// Efecto visual de explosion del sol: nucleo que se encoge + onda
-// expansiva que se desvanece a medida que frames_remaining baja a 0.
-// Implementacion minima de Persona 1 para poder probar el ciclo de vida
-// de la estrella end-to-end; Persona 2 puede mejorarla libremente.
-void render_explosion_effect(RenderContext *ctx, const Body *bodies, int n_active, int frames_remaining);
+void render_sun_corona(RenderContext *ctx, const Body *bodies);
+
+void render_explosion_effect(RenderContext *ctx, const Body *bodies, int n_active, float seconds_remaining);
 
 // Presenta el frame
 void render_present(RenderContext *ctx);

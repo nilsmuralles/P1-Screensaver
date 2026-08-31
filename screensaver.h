@@ -17,12 +17,11 @@
 #define EPSILON 2.0f
 #define MAX_BODIES 100000
 
-// Ciclo de vida de la estrella: acrecion (fusion planeta-sol) + explosion
 #define SUN_BASE_MASS 5000.0f
-#define SUN_BASE_RADIUS 12.0f
-#define MERGE_DISTANCE_FACTOR 1.8f       // holgura sobre la suma de radios al fusionar, por calibrar
-#define EXPLOSION_ABSORPTION_FRACTION 0.3f // fraccion de la masa total de planetas que el sol debe absorber para explotar
-#define EXPLOSION_DURATION_FRAMES 60      // duracion del efecto visual antes de reiniciar, por calibrar
+#define SUN_BASE_RADIUS 22.0f
+#define MERGE_DISTANCE_FACTOR 1.8f
+#define EXPLOSION_ABSORPTION_FRACTION 0.3f
+#define EXPLOSION_DURATION_SECONDS 2.5f
 
 enum ExecMode {
   SECUENCIAL,

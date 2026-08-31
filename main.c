@@ -121,7 +121,7 @@ int main(int argc, char *argv[]) {
 
   enum SimState state = STATE_RUNNING;
   int active_n = n;
-  int explosion_timer = 0;
+  float explosion_timer = 0.0f;
   int frame_count = 0;
 
   while (render_poll_events(&ctx)) {
@@ -146,11 +146,11 @@ int main(int argc, char *argv[]) {
         printf("EXPLOSION en frame %d (active_n=%d, sun_mass=%.1f)\n",
                frame_count, active_n, bodies[0].mass);
         state = STATE_EXPLODING;
-        explosion_timer = EXPLOSION_DURATION_FRAMES;
+        explosion_timer = EXPLOSION_DURATION_SECONDS;
       }
-    } else { 
-      explosion_timer--;
-      if (explosion_timer <= 0) {
+    } else {
+      explosion_timer -= render_get_delta_time(&ctx);
+      if (explosion_timer <= 0.0f) {
         init_bodies(bodies, n);
         active_n = n;
         explosion_threshold = SUN_BASE_MASS + total_planet_mass(bodies, n) * EXPLOSION_ABSORPTION_FRACTION;
@@ -161,6 +161,7 @@ int main(int argc, char *argv[]) {
 
     render_clear(&ctx, 10, 10, 20);
     if (state == STATE_RUNNING) {
+      render_sun_corona(&ctx, bodies);
       render_bodies(&ctx, bodies, active_n);
     } else {
       render_explosion_effect(&ctx, bodies, active_n, explosion_timer);
