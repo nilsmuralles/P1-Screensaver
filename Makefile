@@ -55,9 +55,12 @@ omp: CFLAGS += $(OMP_CFLAGS)
 omp: LDFLAGS += $(OMP_LDFLAGS)
 omp: $(TARGET)
 
-# spatial.o siempre se compila con flags de OpenMP (independiente del
-# target 'omp' de arriba), porque su fallback sin _OPENMP es solo un
-# camino de compatibilidad, no el modo de uso real.
+# physics.o, spatial.o y corona.o siempre se compilan con flags de OpenMP
+# (independiente del target 'omp' de arriba), porque su fallback sin
+# _OPENMP es solo un camino de compatibilidad, no el modo de uso real.
+physics.o: physics.c screensaver.h
+	$(CC) $(CFLAGS) $(OMP_CFLAGS) -c physics.c -o physics.o
+
 spatial.o: spatial.c spatial.h screensaver.h
 	$(CC) $(CFLAGS) $(OMP_CFLAGS) -c spatial.c -o spatial.o
 

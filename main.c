@@ -35,18 +35,20 @@ int parse_args(int argc, char *argv[], int *n_bodies, enum ExecMode *mode, int *
   if (argc >= 3) {
     if (strcmp(argv[2], "seq") == 0 || strcmp(argv[2], "secuencial") == 0) {
       *mode = SECUENCIAL;
+    } else if (strcmp(argv[2], "datos") == 0 || strcmp(argv[2], "paralelo") == 0) {
+      *mode = PARALELO_DATOS;
     } else if (strcmp(argv[2], "espacial") == 0 || strcmp(argv[2], "spatial") == 0) {
       *mode = ESPACIAL;
     } else {
-      fprintf(stderr, "Error: modo '%s' invalido (usar seq | espacial)\n", argv[2]);
+      fprintf(stderr, "Error: modo '%s' invalido (usar seq | datos | espacial)\n", argv[2]);
       return 0;
     }
   }
 
   *schedule_kind = 0;
   if (argc == 4) {
-    if (*mode != ESPACIAL) {
-      fprintf(stderr, "Error: 'schedule' solo aplica con modo=espacial\n");
+    if (*mode != ESPACIAL && *mode != PARALELO_DATOS) {
+      fprintf(stderr, "Error: 'schedule' solo aplica con modo=datos o modo=espacial\n");
       return 0;
     }
     if (strcmp(argv[3], "static") == 0) {
@@ -101,6 +103,9 @@ int main(int argc, char *argv[]) {
     else if (schedule_kind == 2) kind = SPATIAL_SCHEDULE_GUIDED;
     spatial_set_schedule(kind, 0);
     printf("Modo: ESTRATEGIA_2_ESPACIAL, schedule=%s\n", spatial_schedule_name());
+  } else if (mode == PARALELO_DATOS) {
+    set_forces_schedule(schedule_kind);
+    printf("Modo: ESTRATEGIA_1_DATOS, schedule=%s\n", forces_schedule_name());
   } else {
     printf("Modo: SECUENCIAL\n");
   }
@@ -131,6 +136,8 @@ int main(int argc, char *argv[]) {
       if (mode == ESPACIAL) {
         spatial_grid_build(&grid, bodies, active_n);
         calculate_forces_spatial(bodies, active_n, ax, ay, &grid);
+      } else if (mode == PARALELO_DATOS) {
+        calculate_forces_parallel(bodies, active_n, ax, ay);
       } else {
         calculate_forces(bodies, active_n, ax, ay);
       }

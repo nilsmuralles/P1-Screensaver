@@ -25,8 +25,8 @@
 
 enum ExecMode {
   SECUENCIAL,
+  PARALELO_DATOS,
   ESPACIAL
-
 };
 
 enum SimState {
@@ -44,6 +44,9 @@ typedef struct {
 
 void init_bodies(Body *bodies, int n_boides);
 void calculate_forces(Body *bodies, int n_bodies, float *ax, float *ay);
+void calculate_forces_parallel(Body *bodies, int n_bodies, float *ax, float *ay);
+void set_forces_schedule(int schedule_kind);
+const char *forces_schedule_name(void);
 void update_bodies(Body *bodies, int n_bodies, float *ax, float *ay, float dt);
 int parse_args(int argc, char *argv[], int *n_bodies, enum ExecMode *mode, int *schedule_kind);
 int check_and_merge_collisions(Body *bodies, int n_active);

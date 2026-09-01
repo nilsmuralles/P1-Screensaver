@@ -3,6 +3,10 @@
 #include <stdlib.h>
 #include "screensaver.h"
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -64,6 +68,65 @@ void calculate_forces(Body *bodies, int n_bodies, float *ax, float *ay) {
       sum_ay += f * dy;
       
     } 
+
+    ax[i] = sum_ax;
+    ay[i] = sum_ay;
+  }
+}
+
+#ifdef _OPENMP
+static omp_sched_t g_forces_schedule_kind = omp_sched_static;
+static int g_forces_schedule_chunk = 0;
+#endif
+
+void set_forces_schedule(int schedule_kind) {
+#ifdef _OPENMP
+  switch (schedule_kind) {
+    case 1: g_forces_schedule_kind = omp_sched_dynamic; break;
+    case 2: g_forces_schedule_kind = omp_sched_guided; break;
+    default: g_forces_schedule_kind = omp_sched_static; break;
+  }
+  omp_set_schedule(g_forces_schedule_kind, g_forces_schedule_chunk);
+#else
+  (void)schedule_kind;
+#endif
+}
+
+const char *forces_schedule_name(void) {
+#ifdef _OPENMP
+  switch (g_forces_schedule_kind) {
+    case omp_sched_dynamic: return "dynamic";
+    case omp_sched_guided:  return "guided";
+    default:                return "static";
+  }
+#else
+  return "secuencial (sin OpenMP)";
+#endif
+}
+
+// Estrategia 1 (por datos): mismo algoritmo O(N^2) que calculate_forces,
+// pero repartiendo el loop externo de "i" entre hilos con OpenMP. Cada
+// iteracion de i solo escribe ax[i]/ay[i], por eso no hace falta
+// critical/atomic ni reduction.
+void calculate_forces_parallel(Body *bodies, int n_bodies, float *ax, float *ay) {
+  #pragma omp parallel for schedule(runtime)
+  for (int i = 0; i < n_bodies; i++) {
+    float sum_ax = 0.0f;
+    float sum_ay = 0.0f;
+
+    for (int j = 0; j < n_bodies; j++) {
+      if (i == j) continue;
+
+      float dx = bodies[j].x - bodies[i].x;
+      float dy = bodies[j].y - bodies[i].y;
+      float r2 = dx*dx + dy*dy + EPSILON*EPSILON;
+      float r  = sqrtf(r2);
+
+      float f = CONST_G * bodies[j].mass / (r2 * r);
+
+      sum_ax += f * dx;
+      sum_ay += f * dy;
+    }
 
     ax[i] = sum_ax;
     ay[i] = sum_ay;
