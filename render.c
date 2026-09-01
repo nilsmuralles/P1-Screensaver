@@ -3,7 +3,6 @@
 #include "raylib.h"
 #include "render.h"
 #include "render_shaders.h"
-#include "corona.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -17,7 +16,7 @@
 #define SHADOW_SEGMENTS 24
 
 #define SHADOW_RADIUS_OVERSHOOT 1.08f
-#define SHADOW_FEATHER_STEPS 8
+#define SHADOW_FEATHER_STEPS 2
 #define SHADOW_FEATHER_DEG 50.0f
 
 #define CORONA_SCREEN_SCALE 4.5f
@@ -35,26 +34,13 @@ struct RenderShaderState {
   int loc_star_time;
   Shader post_shader;
 
-  CoronaBuffer corona;
-  Texture2D corona_tex;
+  // Corona generada en GPU (ver CORONA_FS en render_shaders.h): reemplaza
+  // el enfoque anterior de generar una textura por frame en CPU y subirla
+  // con UpdateTexture(), que agregaba una transferencia CPU->GPU y una
+  // region OpenMP extra cada frame solo para el efecto visual.
+  Shader corona_shader;
+  int loc_corona_time;
 };
-
-static int corona_texture_init(struct RenderShaderState *st) {
-  if (!corona_init(&st->corona)) return 0;
-
-  corona_generate(&st->corona, 0.0f);
-
-  Image img = {
-    .data = st->corona.pixels,
-    .width = CORONA_TEX_SIZE,
-    .height = CORONA_TEX_SIZE,
-    .mipmaps = 1,
-    .format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8
-  };
-  st->corona_tex = LoadTextureFromImage(img);
-
-  return st->corona_tex.id != 0;
-}
 
 static RenderShaderState *shader_state_init(int width, int height) {
   RenderShaderState *st = malloc(sizeof(RenderShaderState));
@@ -63,20 +49,20 @@ static RenderShaderState *shader_state_init(int width, int height) {
   st->scene = LoadRenderTexture(width, height);
   st->star_shader = LoadShaderFromMemory(NULL, STAR_FIELD_FS);
   st->post_shader = LoadShaderFromMemory(NULL, POSTPROCESS_FS);
-  int corona_ok = corona_texture_init(st);
+  st->corona_shader = LoadShaderFromMemory(NULL, CORONA_FS);
 
-  if (st->scene.id == 0 || st->star_shader.id == 0 || st->post_shader.id == 0 || !corona_ok) {
+  if (st->scene.id == 0 || st->star_shader.id == 0 || st->post_shader.id == 0 || st->corona_shader.id == 0) {
     TraceLog(LOG_WARNING, "No se pudieron inicializar los shaders; se sigue sin ellos.");
     if (st->scene.id != 0) UnloadRenderTexture(st->scene);
     if (st->star_shader.id != 0) UnloadShader(st->star_shader);
     if (st->post_shader.id != 0) UnloadShader(st->post_shader);
-    if (st->corona_tex.id != 0) UnloadTexture(st->corona_tex);
-    corona_free(&st->corona);
+    if (st->corona_shader.id != 0) UnloadShader(st->corona_shader);
     free(st);
     return NULL;
   }
 
   st->loc_star_time = GetShaderLocation(st->star_shader, "u_time");
+  st->loc_corona_time = GetShaderLocation(st->corona_shader, "u_time");
   int loc_star_res  = GetShaderLocation(st->star_shader, "u_resolution");
   int loc_star_dens = GetShaderLocation(st->star_shader, "u_starDensity");
   int loc_star_twk  = GetShaderLocation(st->star_shader, "u_twinkleSpeed");
@@ -106,8 +92,7 @@ static void shader_state_free(RenderShaderState *st) {
   UnloadRenderTexture(st->scene);
   UnloadShader(st->star_shader);
   UnloadShader(st->post_shader);
-  UnloadTexture(st->corona_tex);
-  corona_free(&st->corona);
+  UnloadShader(st->corona_shader);
   free(st);
 }
 
@@ -184,27 +169,30 @@ static Color darken_color(Color c, float factor) {
   };
 }
 
+#define CORONA_SEGMENTS 64
+
 void render_sun_corona(RenderContext *ctx, const Body *bodies) {
   if (ctx->shaders == NULL) return;
 
   float t = (float)GetTime();
-  corona_generate(&ctx->shaders->corona, t);
-  UpdateTexture(ctx->shaders->corona_tex, ctx->shaders->corona.pixels);
+  SetShaderValue(ctx->shaders->corona_shader, ctx->shaders->loc_corona_time, &t, SHADER_UNIFORM_FLOAT);
 
   const Body *sun = &bodies[0];
   float corona_size = sun->radius * CORONA_SCREEN_SCALE;
-
-  Rectangle src = { 0, 0, (float)CORONA_TEX_SIZE, (float)CORONA_TEX_SIZE };
-  Rectangle dst = { sun->x - corona_size / 2.0f, sun->y - corona_size / 2.0f, corona_size, corona_size };
+  Vector2 center = { sun->x, sun->y };
 
   BeginBlendMode(BLEND_ADDITIVE);
-  DrawTexturePro(ctx->shaders->corona_tex, src, dst, (Vector2){ 0, 0 }, 0.0f, WHITE);
+  BeginShaderMode(ctx->shaders->corona_shader);
+  DrawCircleSector(center, corona_size / 2.0f, 0, 360, CORONA_SEGMENTS, WHITE);
+  EndShaderMode();
   EndBlendMode();
 }
 
 void render_bodies(RenderContext *ctx, const Body *bodies, int n_bodies) {
   (void)ctx;
   const Body *sun = &bodies[0];
+
+  int draw_shadows = n_bodies <= 5000;
 
   for (int i = 0; i < n_bodies; i++) {
     const Body *body = &bodies[i];
@@ -217,6 +205,7 @@ void render_bodies(RenderContext *ctx, const Body *bodies, int n_bodies) {
     float dy = body->y - sun->y;
     if (dx == 0.0f && dy == 0.0f) continue;
 
+    if (!draw_shadows) continue;
 
     float away_from_sun_deg = atan2f(dy, dx) * (180.0f / (float)M_PI);
 

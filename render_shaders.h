@@ -35,6 +35,45 @@ static const char *STAR_FIELD_FS =
 "  finalColor = vec4(vec3(1.0), intensity) * colDiffuse;\n"
 "}\n";
 
+// Corona solar generada enteramente en el fragment shader (equivalente a
+// corona_generate() en corona.c, pero sin CPU: sin generar una textura por
+// frame ni transferirla a la GPU con UpdateTexture). Se dibuja sobre un
+// rectangulo del tamano/posicion de la corona (ver render_sun_corona en
+// render.c), asi que fragTexCoord ya llega normalizado en [0,1] dentro de
+// ese rectangulo.
+static const char *CORONA_FS =
+"#version 330\n"
+"in vec2 fragTexCoord;\n"
+"in vec4 fragColor;\n"
+"uniform sampler2D texture0;\n"
+"uniform vec4 colDiffuse;\n"
+"uniform float u_time;\n"
+"out vec4 finalColor;\n"
+"float noise2(vec2 p) {\n"
+"  float h = sin(p.x * 127.1 + p.y * 311.7) * 43758.5453;\n"
+"  return fract(h);\n"
+"}\n"
+"void main() {\n"
+"  vec2 centered = fragTexCoord * 2.0 - 1.0;\n"
+"  float dist = length(centered);\n"
+// Descarta explicitamente los fragmentos fuera del circulo unitario: no
+// basta con que baje el alpha a 0, porque si el blend mode no respeta el
+// canal alpha del fragmento (segun la implementacion), el rectangulo
+// completo queda visible como un cuadrado solido alrededor del sol.
+"  if (dist > 1.0) {\n"
+"    discard;\n"
+"  }\n"
+"  float angle = atan(centered.y, centered.x);\n"
+"  vec2 pseudoPixel = fragTexCoord * 128.0;\n" // misma escala que CORONA_TEX_SIZE de la version CPU, para que el patron de ruido se vea igual
+"  float flicker = 0.5 + 0.5 * sin(angle * 6.0 + u_time * 1.5 + noise2(pseudoPixel) * 3.0);\n"
+"  float falloff = 1.0 - dist;\n"
+"  falloff = falloff * falloff;\n"
+"  float intensity = clamp(falloff * (0.6 + 0.4 * flicker), 0.0, 1.0);\n"
+"  vec3 color = vec3(1.0, (200.0 + 55.0 * intensity) / 255.0, (70.0 + 50.0 * intensity) / 255.0);\n"
+// Alpha premultiplicado como segunda salvaguarda contra el mismo problema.
+"  finalColor = vec4(color * intensity, intensity) * colDiffuse;\n"
+"}\n";
+
 // Post-procesado de pantalla completa para eñ contraste alrededor del gris medio,
 // ajuste de saturacion, y una vineta suave hacia los bordes. Se aplica
 // sobre la escena ya renderizada, asi que se ve por

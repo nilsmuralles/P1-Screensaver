@@ -1,8 +1,8 @@
 #ifndef SCREENSAVER_H
 #define SCREENSAVER_H
 
-#define WIDTH 640
-#define HEIGHT 480
+#define WIDTH 1280
+#define HEIGHT 960
 #define MIN_FPS 30
 #define TARGET_FPS 60 // referencia historica; ya no se usa para limitar FPS (ver decision 6.3 del plan)
 
@@ -13,7 +13,7 @@
 // Por calibrar visualmente junto al equipo si se ajustan CONST_G/SUN_BASE_MASS.
 #define SIM_TIME_SCALE 60.0f
 
-#define CONST_G 6.674e-2
+#define CONST_G 6.674e-2f
 #define EPSILON 2.0f
 #define MAX_BODIES 100000
 
@@ -52,5 +52,30 @@ int parse_args(int argc, char *argv[], int *n_bodies, enum ExecMode *mode, int *
 int check_and_merge_collisions(Body *bodies, int n_active);
 int should_explode(const Body *bodies, int n_active, float mass_threshold);
 float total_planet_mass(const Body *bodies, int n_active);
+
+// --- Estrategia por datos: fuerzas + actualizacion en una sola region
+// paralela (evita abrir dos regiones OpenMP por frame). Usa la misma
+// politica de schedule configurada via set_forces_schedule().
+void simulate_step_datos(Body *bodies, int n_bodies, float *ax, float *ay, float dt);
+
+// --- Tercera ley de Newton: cada pareja (i, j) se calcula una sola vez.
+// Usa acumuladores privados por hilo para evitar atomics/critical; el
+// costo extra es memoria O(P*N) y una reduccion final O(P*N).
+void calculate_forces_parallel_newton3(Body *bodies, int n_bodies, float *ax, float *ay);
+
+// --- Estructura de arreglos (SoA) para el kernel gravitacional: mejora
+// localidad de cache frente a cargar todo el struct Body (que incluye
+// velocidad, radio y color, no usados por el kernel).
+typedef struct {
+  float *x;
+  float *y;
+  float *mass;
+  int capacity;
+} PhysicsSoA;
+
+int physics_soa_init(PhysicsSoA *soa, int max_bodies);
+void physics_soa_free(PhysicsSoA *soa);
+void physics_soa_sync(PhysicsSoA *soa, const Body *bodies, int n_bodies);
+void calculate_forces_soa_parallel(const PhysicsSoA *soa, int n_bodies, float *ax, float *ay);
 
 #endif

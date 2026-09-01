@@ -4,6 +4,7 @@
 #include "screensaver.h"
 #include "render.h"
 #include "spatial.h"
+#include "bench.h"
 
 
 int parse_args(int argc, char *argv[], int *n_bodies, enum ExecMode *mode, int *schedule_kind) {
@@ -67,6 +68,14 @@ int parse_args(int argc, char *argv[], int *n_bodies, enum ExecMode *mode, int *
 }
 
 int main(int argc, char *argv[]) {
+  // Modo benchmark: no debe inicializar raylib ni abrir ventana (ver
+  // seccion 9-10 del plan de optimizacion). Se atiende antes que
+  // parse_args() porque usa su propio formato de flags (--bodies, --mode,
+  // etc.) en vez del formato posicional del modo interactivo.
+  if (argc >= 2 && strcmp(argv[1], "--benchmark") == 0) {
+    return run_benchmark(argc, argv);
+  }
+
   int n;
   enum ExecMode mode;
   int schedule_kind;
@@ -136,17 +145,20 @@ int main(int argc, char *argv[]) {
       if (mode == ESPACIAL) {
         spatial_grid_build(&grid, bodies, active_n);
         calculate_forces_spatial(bodies, active_n, ax, ay, &grid);
+        update_bodies(bodies, active_n, ax, ay, dt);
       } else if (mode == PARALELO_DATOS) {
-        calculate_forces_parallel(bodies, active_n, ax, ay);
+        // Fuerzas + actualizacion en una sola region OpenMP (evita el
+        // costo de abrir dos regiones por frame); ver simulate_step_datos().
+        simulate_step_datos(bodies, active_n, ax, ay, dt);
       } else {
         calculate_forces(bodies, active_n, ax, ay);
+        update_bodies(bodies, active_n, ax, ay, dt);
       }
-      update_bodies(bodies, active_n, ax, ay, dt);
       active_n = check_and_merge_collisions(bodies, active_n);
 
       if (frame_count % 30 == 0) {
-        printf("frame %d: active_n=%d sun_mass=%.1f sun_radius=%.2f\n",
-               frame_count, active_n, bodies[0].mass, bodies[0].radius);
+        printf("frame %d: active_n=%d sun_mass=%.1f sun_radius=%.2f fps=%.1f\n",
+               frame_count, active_n, bodies[0].mass, bodies[0].radius, render_get_fps(&ctx));
       }
 
       if (should_explode(bodies, active_n, explosion_threshold)) {
