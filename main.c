@@ -40,8 +40,10 @@ int parse_args(int argc, char *argv[], int *n_bodies, enum ExecMode *mode, int *
       *mode = PARALELO_DATOS;
     } else if (strcmp(argv[2], "espacial") == 0 || strcmp(argv[2], "spatial") == 0) {
       *mode = ESPACIAL;
+    } else if (strcmp(argv[2], "tareas") == 0 || strcmp(argv[2], "tasks") == 0) {
+      *mode = TAREAS;
     } else {
-      fprintf(stderr, "Error: modo '%s' invalido (usar seq | datos | espacial)\n", argv[2]);
+      fprintf(stderr, "Error: modo '%s' invalido (usar seq | datos | espacial | tareas)\n", argv[2]);
       return 0;
     }
   }
@@ -49,6 +51,8 @@ int parse_args(int argc, char *argv[], int *n_bodies, enum ExecMode *mode, int *
   *schedule_kind = 0;
   if (argc == 4) {
     if (*mode != ESPACIAL && *mode != PARALELO_DATOS) {
+      // Nota: TAREAS decide su propio reparto dinamico via omp task,
+      // no acepta el flag "schedule" (static/dynamic/guided).
       fprintf(stderr, "Error: 'schedule' solo aplica con modo=datos o modo=espacial\n");
       return 0;
     }
@@ -115,6 +119,8 @@ int main(int argc, char *argv[]) {
   } else if (mode == PARALELO_DATOS) {
     set_forces_schedule(schedule_kind);
     printf("Modo: ESTRATEGIA_1_DATOS, schedule=%s\n", forces_schedule_name());
+  } else if (mode == TAREAS) {
+    printf("Modo: ESTRATEGIA_3_TAREAS\n");
   } else {
     printf("Modo: SECUENCIAL\n");
   }
@@ -150,6 +156,8 @@ int main(int argc, char *argv[]) {
         // Fuerzas + actualizacion en una sola region OpenMP (evita el
         // costo de abrir dos regiones por frame); ver simulate_step_datos().
         simulate_step_datos(bodies, active_n, ax, ay, dt);
+      } else if (mode == TAREAS) {
+        simulate_step_tasks(bodies, active_n, ax, ay, dt);
       } else {
         calculate_forces(bodies, active_n, ax, ay);
         update_bodies(bodies, active_n, ax, ay, dt);

@@ -16,7 +16,7 @@ make omp        # ademas habilita OpenMP en main.o/render.o (no necesario:
 
 ```bash
 ./main <N> [modo] [schedule]
-# modo:     seq | datos | espacial   (default: seq)
+# modo:     seq | datos | espacial | tareas   (default: seq)
 # schedule: static | dynamic | guided (solo aplica a datos/espacial)
 
 ./main 5000 datos static
@@ -35,7 +35,7 @@ Flags:
 | Flag | Default | Descripción |
 |---|---|---|
 | `--bodies N` | *(obligatorio)* | número de cuerpos |
-| `--mode M` | `datos` | `seq` \| `datos` \| `espacial` \| `newton3` \| `soa` \| `barneshut` |
+| `--mode M` | `datos` | `seq` \| `datos` \| `espacial` \| `newton3` \| `soa` \| `barneshut` \| `tareas` |
 | `--steps S` | `100` | pasos medidos |
 | `--warmup W` | `5` | pasos de calentamiento (no se miden) |
 | `--threads T` | *(default de OpenMP)* | `omp_set_num_threads(T)` |
@@ -54,6 +54,7 @@ Imprime dos tiempos: el del kernel de fuerzas (incluye construcción de grid/ár
 - `newton3`: gravedad exacta, explota la 3ª ley de Newton (cada pareja una sola vez) con acumuladores privados por hilo.
 - `soa`: gravedad exacta, kernel sobre estructura de arreglos (x/y/mass planos) para mejor localidad de caché.
 - `barneshut`: aproximación jerárquica O(N log N) vía quadtree; `--theta` controla la precisión.
+- `tareas`: gravedad exacta, `omp task` explícito por bloque de cuerpos (en vez de `omp for`); el runtime reparte los tasks dinámicamente entre hilos.
 
 ## Notas de diseño
 

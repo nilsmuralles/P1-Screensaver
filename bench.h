@@ -10,7 +10,7 @@
 //
 // Flags soportadas:
 //   --bodies N       (obligatorio) numero de cuerpos, 2 <= N <= MAX_BODIES
-//   --mode M         seq | datos | espacial | newton3 | soa | barneshut (default: datos)
+//   --mode M         seq | datos | espacial | newton3 | soa | barneshut | tareas (default: datos)
 //   --steps S        pasos medidos (default: 100)
 //   --warmup W       pasos de calentamiento antes de medir (default: 5)
 //   --threads T      omp_set_num_threads(T); si se omite, usa el default de OpenMP

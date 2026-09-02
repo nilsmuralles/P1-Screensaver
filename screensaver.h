@@ -26,7 +26,8 @@
 enum ExecMode {
   SECUENCIAL,
   PARALELO_DATOS,
-  ESPACIAL
+  ESPACIAL,
+  TAREAS
 };
 
 enum SimState {
@@ -62,6 +63,14 @@ void simulate_step_datos(Body *bodies, int n_bodies, float *ax, float *ay, float
 // Usa acumuladores privados por hilo para evitar atomics/critical; el
 // costo extra es memoria O(P*N) y una reduccion final O(P*N).
 void calculate_forces_parallel_newton3(Body *bodies, int n_bodies, float *ax, float *ay);
+
+// --- Estrategia por tareas: el hilo "single" genera un task por cada
+// bloque de cuerpos; el runtime de OpenMP reparte esos tasks entre los
+// hilos disponibles (a diferencia de "datos", que usa omp for con
+// particionamiento decidido por la clausula schedule, no por el
+// programador creando tasks explicitos).
+void calculate_forces_tasks(Body *bodies, int n_bodies, float *ax, float *ay);
+void simulate_step_tasks(Body *bodies, int n_bodies, float *ax, float *ay, float dt);
 
 // --- Estructura de arreglos (SoA) para el kernel gravitacional: mejora
 // localidad de cache frente a cargar todo el struct Body (que incluye

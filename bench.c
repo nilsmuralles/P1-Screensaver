@@ -18,7 +18,8 @@ typedef enum {
   BENCH_ESPACIAL,
   BENCH_NEWTON3,
   BENCH_SOA,
-  BENCH_BARNES_HUT
+  BENCH_BARNES_HUT,
+  BENCH_TASKS
 } BenchMode;
 
 static double now_seconds(void) {
@@ -49,6 +50,7 @@ static const char *bench_mode_name(BenchMode m) {
     case BENCH_NEWTON3:    return "newton3";
     case BENCH_SOA:        return "soa";
     case BENCH_BARNES_HUT: return "barnes_hut";
+    case BENCH_TASKS:      return "tareas";
   }
   return "?";
 }
@@ -91,6 +93,7 @@ int run_benchmark(int argc, char *argv[]) {
       else if (strcmp(argv[i], "newton3") == 0)                                   mode = BENCH_NEWTON3;
       else if (strcmp(argv[i], "soa") == 0)                                       mode = BENCH_SOA;
       else if (strcmp(argv[i], "barneshut") == 0 || strcmp(argv[i], "bh") == 0)    mode = BENCH_BARNES_HUT;
+      else if (strcmp(argv[i], "tareas") == 0 || strcmp(argv[i], "tasks") == 0)    mode = BENCH_TASKS;
       else { fprintf(stderr, "Error: --mode '%s' invalido\n", argv[i]); return 1; }
     } else if (strcmp(argv[i], "--steps") == 0 && i + 1 < argc) {
       if (!parse_int_arg(argv[++i], &steps)) { fprintf(stderr, "Error: --steps invalido\n"); return 1; }
@@ -228,6 +231,9 @@ int run_benchmark(int argc, char *argv[]) {
         case BENCH_BARNES_HUT:
           bh_tree_build(&tree, bodies, n_bodies);
           calculate_forces_barnes_hut(&tree, bodies, n_bodies, ax, ay, theta);
+          break;
+        case BENCH_TASKS:
+          calculate_forces_tasks(bodies, n_bodies, ax, ay);
           break;
       }
       double t_kernel_end = measured ? now_seconds() : 0.0;

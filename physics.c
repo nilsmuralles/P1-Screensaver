@@ -249,6 +249,77 @@ void calculate_forces_parallel_newton3(Body *bodies, int n_bodies, float *ax, fl
   free(local_ay);
 }
 
+// Tamaño de bloque por task: muy chico => overhead de crear tasks domina;
+// muy grande => pocos tasks, mal balanceo. 256 es un punto de partida
+// razonable para N en el rango de miles/decenas de miles.
+#define TASK_CHUNK_SIZE 256
+
+// Genera un task por bloque de cuerpos. Debe llamarse desde dentro de una
+// region "#pragma omp parallel" + "single" ya abierta por el caller (no
+// abre la suya propia), para poder reutilizarse tanto sola como encadenada
+// con otros tasks sin caer en paralelismo anidado (que por defecto corre
+// con 1 solo hilo y anularia el reparto de trabajo).
+static void dispatch_force_tasks(Body *bodies, int n_bodies, float *ax, float *ay) {
+  for (int start = 0; start < n_bodies; start += TASK_CHUNK_SIZE) {
+    int end = start + TASK_CHUNK_SIZE;
+    if (end > n_bodies) end = n_bodies;
+
+    #pragma omp task firstprivate(start, end) shared(bodies, ax, ay, n_bodies)
+    {
+      for (int i = start; i < end; i++) {
+        const float xi = bodies[i].x;
+        const float yi = bodies[i].y;
+        float sum_ax = 0.0f;
+        float sum_ay = 0.0f;
+
+        for (int j = 0; j < n_bodies; j++) {
+          if (i == j) continue;
+          float dx = bodies[j].x - xi;
+          float dy = bodies[j].y - yi;
+          float r2 = dx*dx + dy*dy + EPSILON*EPSILON;
+          float f  = CONST_G * bodies[j].mass / (r2 * sqrtf(r2));
+          sum_ax += f * dx;
+          sum_ay += f * dy;
+        }
+
+        ax[i] = sum_ax;
+        ay[i] = sum_ay;
+      }
+    } // fin task
+  }
+}
+
+// Estrategia 3 (por tareas): en vez de un omp for con schedule fijo, el
+// hilo "single" genera explicitamente un task por bloque de cuerpos y el
+// runtime de OpenMP los reparte dinamicamente entre los hilos libres.
+void calculate_forces_tasks(Body *bodies, int n_bodies, float *ax, float *ay) {
+  #pragma omp parallel
+  {
+    #pragma omp single
+    {
+      dispatch_force_tasks(bodies, n_bodies, ax, ay);
+      #pragma omp taskwait
+    } // fin single
+  } // fin parallel
+}
+
+// Pipeline por tareas: fuerzas y actualizacion dentro de una sola region
+// parallel/single (evita abrir una segunda region por frame, igual que
+// simulate_step_datos). update_bodies depende del resultado de las tasks
+// de fuerza, por eso el "taskwait" intermedio antes de actualizarlas.
+void simulate_step_tasks(Body *bodies, int n_bodies, float *ax, float *ay, float dt) {
+  #pragma omp parallel
+  {
+    #pragma omp single
+    {
+      dispatch_force_tasks(bodies, n_bodies, ax, ay);
+      #pragma omp taskwait
+
+      update_bodies(bodies, n_bodies, ax, ay, dt);
+    }
+  }
+}
+
 // --- Estructura de arreglos (SoA) para el kernel gravitacional ---
 //
 // El kernel solo necesita x, y y mass, pero Body tambien carga vx, vy,
