@@ -24,7 +24,7 @@ else
     OMP_LDFLAGS := -fopenmp
 endif
 
-SRCS = main.c physics.c render.c spatial.c corona.c barnes_hut.c bench.c
+SRCS = main.c physics.c render.c spatial.c corona.c bench.c
 OBJS = $(SRCS:.c=.o)
 TARGET = main
 
@@ -64,7 +64,7 @@ omp: CFLAGS += $(OMP_CFLAGS)
 omp: LDFLAGS += $(OMP_LDFLAGS)
 omp: $(TARGET)
 
-# physics.o, spatial.o, corona.o, barnes_hut.o y bench.o siempre se compilan
+# physics.o, spatial.o, corona.o y bench.o siempre se compilan
 # con flags de OpenMP (independiente del target 'omp' de arriba), porque su
 # fallback sin _OPENMP es solo un camino de compatibilidad, no el modo de uso real.
 physics.o: physics.c screensaver.h
@@ -76,10 +76,7 @@ spatial.o: spatial.c spatial.h screensaver.h
 corona.o: corona.c corona.h
 	$(CC) $(CFLAGS) $(OMP_CFLAGS) -c corona.c -o corona.o
 
-barnes_hut.o: barnes_hut.c barnes_hut.h screensaver.h
-	$(CC) $(CFLAGS) $(OMP_CFLAGS) -c barnes_hut.c -o barnes_hut.o
-
-bench.o: bench.c bench.h screensaver.h spatial.h barnes_hut.h
+bench.o: bench.c bench.h screensaver.h spatial.h
 	$(CC) $(CFLAGS) $(OMP_CFLAGS) -c bench.c -o bench.o
 
 run: $(TARGET)

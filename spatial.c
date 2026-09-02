@@ -145,85 +145,59 @@ const char *spatial_schedule_name(void) {
 #endif
 }
 
-static void accumulate_force_from_cells(const Body *bodies, const SpatialGrid *grid, int i,
-                                         const int *neighbor_cells, int num_neighbors,
-                                         float *out_ax, float *out_ay) {
+static void accumulate_force_from_all_bodies(const Body *bodies, const SpatialGrid *grid,
+                                              int i, int n_bodies,
+                                              float *out_ax, float *out_ay) {
   float sum_ax = 0.0f;
   float sum_ay = 0.0f;
 
   const float xi = bodies[i].x;
   const float yi = bodies[i].y;
 
-  for (int n = 0; n < num_neighbors; n++) {
-    int c = neighbor_cells[n];
-    int start = grid->cell_start[c];
-    int end   = grid->cell_start[c + 1];
-    for (int k = start; k < end; k++) {
-      int j = grid->cell_bodies[k];
-      if (i == j) continue;
+  // grid->cell_bodies contiene los n_bodies indices de cuerpo, solo
+  // reordenados por celda (es una permutacion de 0..n_bodies-1, no un
+  // subconjunto). Recorrerlo completo, sin filtrar por celda vecina,
+  // suma la fuerza de TODOS los cuerpos: misma fisica exacta que
+  // calculate_forces()/calculate_forces_parallel(), solo que el orden de
+  // acceso a memoria queda agrupado por celda en vez de plano.
+  for (int k = 0; k < n_bodies; k++) {
+    int j = grid->cell_bodies[k];
+    if (i == j) continue;
 
-      float dx = bodies[j].x - xi;
-      float dy = bodies[j].y - yi;
-      float r2 = dx * dx + dy * dy + EPSILON * EPSILON;
-      float r  = sqrtf(r2);
+    float dx = bodies[j].x - xi;
+    float dy = bodies[j].y - yi;
+    float r2 = dx * dx + dy * dy + EPSILON * EPSILON;
+    float r  = sqrtf(r2);
 
-      float f = CONST_G * bodies[j].mass / (r2 * r);
+    float f = CONST_G * bodies[j].mass / (r2 * r);
 
-      sum_ax += f * dx;
-      sum_ay += f * dy;
-    }
+    sum_ax += f * dx;
+    sum_ay += f * dy;
   }
 
   *out_ax = sum_ax;
   *out_ay = sum_ay;
 }
 
-static void get_neighbor_cells(const SpatialGrid *grid, int cell_idx, int *out_cells, int *out_count) {
-  int cols = grid->grid_cols;
-  int rows = grid->grid_rows;
-  int col = cell_idx % cols;
-  int row = cell_idx / cols;
-
-  int count = 0;
-  for (int dr = -1; dr <= 1; dr++) {
-    for (int dc = -1; dc <= 1; dc++) {
-      int nr = row + dr;
-      int nc = col + dc;
-      if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
-        out_cells[count++] = nr * cols + nc;
-      }
-    }
-  }
-  *out_count = count;
-}
-
 void calculate_forces_spatial(const Body *bodies, int n_bodies,
                                float *ax, float *ay, const SpatialGrid *grid) {
-  int neighbor_cells[9];
-
 #ifdef _OPENMP
   #pragma omp parallel for schedule(runtime)
   for (int c = 0; c < grid->grid_cells; c++) {
-    int num_neighbors;
-    get_neighbor_cells(grid, c, neighbor_cells, &num_neighbors);
-
     int start = grid->cell_start[c];
     int end   = grid->cell_start[c + 1];
     for (int k = start; k < end; k++) {
       int i = grid->cell_bodies[k];
-      accumulate_force_from_cells(bodies, grid, i, neighbor_cells, num_neighbors, &ax[i], &ay[i]);
+      accumulate_force_from_all_bodies(bodies, grid, i, n_bodies, &ax[i], &ay[i]);
     }
   }
 #else
   for (int c = 0; c < grid->grid_cells; c++) {
-    int num_neighbors;
-    get_neighbor_cells(grid, c, neighbor_cells, &num_neighbors);
-
     int start = grid->cell_start[c];
     int end   = grid->cell_start[c + 1];
     for (int k = start; k < end; k++) {
       int i = grid->cell_bodies[k];
-      accumulate_force_from_cells(bodies, grid, i, neighbor_cells, num_neighbors, &ax[i], &ay[i]);
+      accumulate_force_from_all_bodies(bodies, grid, i, n_bodies, &ax[i], &ay[i]);
     }
   }
 #endif

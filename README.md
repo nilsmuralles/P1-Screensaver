@@ -1,6 +1,6 @@
 # P1-Screensaver
 
-Simulación N-body (gravedad exacta y aproximada) con estrategias de paralelismo en OpenMP, renderizada como screensaver con raylib.
+Simulación N-body (gravedad exacta) con estrategias de paralelismo en OpenMP, renderizada como screensaver con raylib. Todas las estrategias calculan el mismo trabajo O(N²) por paso — solo cambia cómo se reparte entre hilos — para que la comparación de speedup/eficiencia entre ellas sea justa (ninguna gana por hacer menos trabajo algorítmico).
 
 ## Compilar
 
@@ -9,7 +9,7 @@ make clean
 make            # build por defecto: -O3, sin -march=native (portable)
 make ARCH_NATIVE=1   # -O3 -march=native, mas rapido pero atado a esta CPU
 make omp        # ademas habilita OpenMP en main.o/render.o (no necesario:
-                # physics/spatial/corona/barnes_hut/bench ya lo llevan siempre)
+                # physics/spatial/corona/bench ya lo llevan siempre)
 ```
 
 ## Modo interactivo (screensaver)
@@ -35,26 +35,24 @@ Flags:
 | Flag | Default | Descripción |
 |---|---|---|
 | `--bodies N` | *(obligatorio)* | número de cuerpos |
-| `--mode M` | `datos` | `seq` \| `datos` \| `espacial` \| `newton3` \| `soa` \| `barneshut` \| `tareas` |
+| `--mode M` | `datos` | `seq` \| `datos` \| `espacial` \| `tareas` |
 | `--steps S` | `100` | pasos medidos |
 | `--warmup W` | `5` | pasos de calentamiento (no se miden) |
 | `--threads T` | *(default de OpenMP)* | `omp_set_num_threads(T)` |
 | `--schedule K` | `static` | `static` \| `dynamic` \| `guided` (solo `datos`/`espacial`) |
-| `--theta X` | `0.5` | ángulo de apertura de Barnes-Hut (`0` = gravedad exacta) |
 | `--repeat R` | `1` | repite la corrida completa R veces y reporta la mediana |
 | `--dt X` | `1.0` | paso de tiempo fijo |
 
-Imprime dos tiempos: el del kernel de fuerzas (incluye construcción de grid/árbol cuando aplica) y el de la física completa (kernel + `update_bodies`).
+Imprime dos tiempos: el del kernel de fuerzas (incluye construcción de grid cuando aplica) y el de la física completa (kernel + `update_bodies`).
 
 ### Estrategias disponibles
 
-- `seq`: gravedad exacta, secuencial.
-- `datos`: gravedad exacta, `parallel for` por cuerpo destino (referencia de paralelismo).
-- `espacial`: gravedad exacta, reparto por celda de un grid espacial — **sigue siendo O(N²)**, no reduce interacciones (ver diagnóstico).
-- `newton3`: gravedad exacta, explota la 3ª ley de Newton (cada pareja una sola vez) con acumuladores privados por hilo.
-- `soa`: gravedad exacta, kernel sobre estructura de arreglos (x/y/mass planos) para mejor localidad de caché.
-- `barneshut`: aproximación jerárquica O(N log N) vía quadtree; `--theta` controla la precisión.
-- `tareas`: gravedad exacta, `omp task` explícito por bloque de cuerpos (en vez de `omp for`); el runtime reparte los tasks dinámicamente entre hilos.
+Todas calculan gravedad exacta con el mismo O(N²) de trabajo total por paso; solo difieren en cómo reparten ese trabajo entre hilos, para que el speedup medido refleje la estrategia de paralelización y no una diferencia de complejidad algorítmica.
+
+- `seq`: secuencial, sin OpenMP (referencia/baseline).
+- `datos`: `parallel for` por cuerpo destino (paralelismo de datos puro).
+- `espacial`: reparto por celda de un grid espacial — cada cuerpo suma la fuerza de **todos** los demás (no solo de celdas vecinas), así que sigue siendo O(N²) real, exactamente comparable con `datos`/`tareas`. Solo cambia la unidad de reparto entre hilos (celda en vez de índice de cuerpo) y el orden de acceso a memoria (agrupado por celda). *Nota histórica: una versión anterior sumaba solo el vecindario de 9 celdas alrededor de cada cuerpo, lo cual truncaba la gravedad a un radio corto y la reducía a ~O(N) — verificado empíricamente antes de corregirlo (a partir de N≈2000 sumaba menos del 3% de las interacciones totales).*
+- `tareas`: `omp task` explícito por bloque de cuerpos (en vez de `omp for`); el runtime reparte los tasks dinámicamente entre hilos.
 
 ## Notas de diseño
 

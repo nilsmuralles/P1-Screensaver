@@ -3,7 +3,6 @@
 #include <string.h>
 #include "screensaver.h"
 #include "spatial.h"
-#include "barnes_hut.h"
 #include "bench.h"
 
 #ifdef _OPENMP
@@ -16,9 +15,6 @@ typedef enum {
   BENCH_SEQ,
   BENCH_DATOS,
   BENCH_ESPACIAL,
-  BENCH_NEWTON3,
-  BENCH_SOA,
-  BENCH_BARNES_HUT,
   BENCH_TASKS
 } BenchMode;
 
@@ -47,9 +43,6 @@ static const char *bench_mode_name(BenchMode m) {
     case BENCH_SEQ:        return "secuencial";
     case BENCH_DATOS:      return "datos";
     case BENCH_ESPACIAL:   return "espacial";
-    case BENCH_NEWTON3:    return "newton3";
-    case BENCH_SOA:        return "soa";
-    case BENCH_BARNES_HUT: return "barnes_hut";
     case BENCH_TASKS:      return "tareas";
   }
   return "?";
@@ -78,7 +71,6 @@ int run_benchmark(int argc, char *argv[]) {
   int warmup = 5;
   int threads = -1;       // -1 = no tocar el default de OpenMP
   int schedule_kind = 0;  // 0=static, 1=dynamic, 2=guided (solo datos/espacial)
-  float theta = BH_THETA_DEFAULT;
   int repeat = 1;
   float dt = 1.0f;
 
@@ -90,9 +82,6 @@ int run_benchmark(int argc, char *argv[]) {
       if      (strcmp(argv[i], "seq") == 0 || strcmp(argv[i], "secuencial") == 0) mode = BENCH_SEQ;
       else if (strcmp(argv[i], "datos") == 0)                                     mode = BENCH_DATOS;
       else if (strcmp(argv[i], "espacial") == 0 || strcmp(argv[i], "spatial") == 0) mode = BENCH_ESPACIAL;
-      else if (strcmp(argv[i], "newton3") == 0)                                   mode = BENCH_NEWTON3;
-      else if (strcmp(argv[i], "soa") == 0)                                       mode = BENCH_SOA;
-      else if (strcmp(argv[i], "barneshut") == 0 || strcmp(argv[i], "bh") == 0)    mode = BENCH_BARNES_HUT;
       else if (strcmp(argv[i], "tareas") == 0 || strcmp(argv[i], "tasks") == 0)    mode = BENCH_TASKS;
       else { fprintf(stderr, "Error: --mode '%s' invalido\n", argv[i]); return 1; }
     } else if (strcmp(argv[i], "--steps") == 0 && i + 1 < argc) {
@@ -107,8 +96,6 @@ int run_benchmark(int argc, char *argv[]) {
       else if (strcmp(argv[i], "dynamic") == 0) schedule_kind = 1;
       else if (strcmp(argv[i], "guided") == 0)  schedule_kind = 2;
       else { fprintf(stderr, "Error: --schedule '%s' invalido\n", argv[i]); return 1; }
-    } else if (strcmp(argv[i], "--theta") == 0 && i + 1 < argc) {
-      if (!parse_float_arg(argv[++i], &theta)) { fprintf(stderr, "Error: --theta invalido\n"); return 1; }
     } else if (strcmp(argv[i], "--repeat") == 0 && i + 1 < argc) {
       if (!parse_int_arg(argv[++i], &repeat)) { fprintf(stderr, "Error: --repeat invalido\n"); return 1; }
     } else if (strcmp(argv[i], "--dt") == 0 && i + 1 < argc) {
@@ -169,31 +156,6 @@ int run_benchmark(int argc, char *argv[]) {
     grid_ready = 1;
   }
 
-  BHTree tree;
-  int tree_ready = 0;
-  if (mode == BENCH_BARNES_HUT) {
-    if (!bh_tree_init(&tree, 8 * n_bodies + 16)) {
-      fprintf(stderr, "Error: no se pudo reservar el arbol Barnes-Hut\n");
-      if (grid_ready) spatial_grid_free(&grid);
-      free(bodies); free(ax); free(ay);
-      return 1;
-    }
-    tree_ready = 1;
-  }
-
-  PhysicsSoA soa;
-  int soa_ready = 0;
-  if (mode == BENCH_SOA) {
-    if (!physics_soa_init(&soa, n_bodies)) {
-      fprintf(stderr, "Error: no se pudo reservar la SoA\n");
-      if (grid_ready) spatial_grid_free(&grid);
-      if (tree_ready) bh_tree_free(&tree);
-      free(bodies); free(ax); free(ay);
-      return 1;
-    }
-    soa_ready = 1;
-  }
-
   // Cada repeticion rehace init_bodies() con la misma semilla, asi que
   // todas parten exactamente del mismo estado inicial.
   double *kernel_times = malloc((size_t)repeat * sizeof(double));
@@ -220,17 +182,6 @@ int run_benchmark(int argc, char *argv[]) {
         case BENCH_ESPACIAL:
           spatial_grid_build(&grid, bodies, n_bodies);
           calculate_forces_spatial(bodies, n_bodies, ax, ay, &grid);
-          break;
-        case BENCH_NEWTON3:
-          calculate_forces_parallel_newton3(bodies, n_bodies, ax, ay);
-          break;
-        case BENCH_SOA:
-          physics_soa_sync(&soa, bodies, n_bodies);
-          calculate_forces_soa_parallel(&soa, n_bodies, ax, ay);
-          break;
-        case BENCH_BARNES_HUT:
-          bh_tree_build(&tree, bodies, n_bodies);
-          calculate_forces_barnes_hut(&tree, bodies, n_bodies, ax, ay, theta);
           break;
         case BENCH_TASKS:
           calculate_forces_tasks(bodies, n_bodies, ax, ay);
@@ -262,7 +213,6 @@ int run_benchmark(int argc, char *argv[]) {
          bench_mode_name(mode), n_bodies, steps, warmup, repeat, effective_threads, dt);
   if (mode == BENCH_DATOS)      printf("schedule=%s\n", forces_schedule_name());
   if (mode == BENCH_ESPACIAL)   printf("schedule=%s\n", spatial_schedule_name());
-  if (mode == BENCH_BARNES_HUT) printf("theta=%.3f\n", theta);
   printf("kernel:        mediana=%.6f s  (%.6f s/paso, %.1f pasos/s)\n",
          kernel_med, kernel_med / steps, steps / kernel_med);
   printf("fisica_total:  mediana=%.6f s  (%.6f s/paso, %.1f pasos/s)  [kernel + update_bodies]\n",
@@ -271,8 +221,6 @@ int run_benchmark(int argc, char *argv[]) {
   free(kernel_times);
   free(total_times);
   if (grid_ready) spatial_grid_free(&grid);
-  if (tree_ready) bh_tree_free(&tree);
-  if (soa_ready) physics_soa_free(&soa);
   free(bodies);
   free(ax);
   free(ay);

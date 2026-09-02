@@ -10,12 +10,11 @@
 //
 // Flags soportadas:
 //   --bodies N       (obligatorio) numero de cuerpos, 2 <= N <= MAX_BODIES
-//   --mode M         seq | datos | espacial | newton3 | soa | barneshut | tareas (default: datos)
+//   --mode M         seq | datos | espacial | tareas (default: datos)
 //   --steps S        pasos medidos (default: 100)
 //   --warmup W       pasos de calentamiento antes de medir (default: 5)
 //   --threads T      omp_set_num_threads(T); si se omite, usa el default de OpenMP
 //   --schedule K     static | dynamic | guided (solo aplica a datos/espacial)
-//   --theta X        angulo de apertura de Barnes-Hut (default: 0.5)
 //   --repeat R       repite la medicion R veces y reporta la mediana (default: 1)
 //   --dt X           paso de tiempo fijo (default: 1.0)
 //

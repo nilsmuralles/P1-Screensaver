@@ -58,10 +58,9 @@ void spatial_set_schedule(SpatialScheduleKind kind, int chunk_size);
 const char *spatial_schedule_name(void);
 
 // Calcula la aceleracion de cada cuerpo igual que calculate_forces() de
-// physics.c (misma formula, mismo CONST_G/EPSILON, sin radio de corte),
-// pero repartiendo el trabajo por celda del grid entre hilos en vez de por
-// indice plano del arreglo. Requiere spatial_grid_build() ya ejecutado
-// sobre el mismo n_bodies.
+// physics.c pero repartiendo el trabajo por celda del grid entre hilos en
+// vez de por indice plano del arreglo. Requiere spatial_grid_build() ya
+// ejecutado sobre el mismo n_bodies.
 void calculate_forces_spatial(const Body *bodies, int n_bodies, float *ax, float *ay, const SpatialGrid *grid);
 
 #endif
