@@ -82,7 +82,7 @@ int run_benchmark(int argc, char *argv[]) {
   int repeat = 1;
   float dt = 1.0f;
 
-  for (int i = 2; i < argc; i++) { // argv[1] == "--benchmark"
+  for (int i = 2; i < argc; i++) {
     if (strcmp(argv[i], "--bodies") == 0 && i + 1 < argc) {
       if (!parse_int_arg(argv[++i], &n_bodies)) { fprintf(stderr, "Error: --bodies invalido\n"); return 1; }
     } else if (strcmp(argv[i], "--mode") == 0 && i + 1 < argc) {

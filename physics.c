@@ -249,16 +249,15 @@ void calculate_forces_parallel_newton3(Body *bodies, int n_bodies, float *ax, fl
   free(local_ay);
 }
 
-// Tamaño de bloque por task: muy chico => overhead de crear tasks domina;
-// muy grande => pocos tasks, mal balanceo. 256 es un punto de partida
-// razonable para N en el rango de miles/decenas de miles.
+// Tamaño de bloque por task: 
+//    Muy chico => overhead de crear tasks domina.
+//    Muy grande => pocos tasks, mal balanceo. 
+// 256 es un punto de partida, razonable para N en el rango de miles/decenas de miles.
 #define TASK_CHUNK_SIZE 256
 
 // Genera un task por bloque de cuerpos. Debe llamarse desde dentro de una
-// region "#pragma omp parallel" + "single" ya abierta por el caller (no
-// abre la suya propia), para poder reutilizarse tanto sola como encadenada
-// con otros tasks sin caer en paralelismo anidado (que por defecto corre
-// con 1 solo hilo y anularia el reparto de trabajo).
+// region "#pragma omp parallel" + "single" ya abierta por el caller, para poder 
+// reutilizarse tanto sola como encadenada con otros tasks sin caer en paralelismo anidado.
 static void dispatch_force_tasks(Body *bodies, int n_bodies, float *ax, float *ay) {
   for (int start = 0; start < n_bodies; start += TASK_CHUNK_SIZE) {
     int end = start + TASK_CHUNK_SIZE;
@@ -299,8 +298,8 @@ void calculate_forces_tasks(Body *bodies, int n_bodies, float *ax, float *ay) {
     {
       dispatch_force_tasks(bodies, n_bodies, ax, ay);
       #pragma omp taskwait
-    } // fin single
-  } // fin parallel
+    }
+  }
 }
 
 // Pipeline por tareas: fuerzas y actualizacion dentro de una sola region
@@ -320,13 +319,10 @@ void simulate_step_tasks(Body *bodies, int n_bodies, float *ax, float *ay, float
   }
 }
 
-// --- Estructura de arreglos (SoA) para el kernel gravitacional ---
-//
 // El kernel solo necesita x, y y mass, pero Body tambien carga vx, vy,
-// radius y color en cada acceso a bodies[j] (mas bytes por linea de cache
-// desperdiciados). physics_soa_sync() copia esos tres campos a arreglos
-// planos antes de calcular fuerzas; el costo es O(N) por frame, muy
-// pequeno frente al O(N^2) del kernel.
+// radius y color en cada acceso a bodies[j]. physics_soa_sync() copia esos
+// tres campos a arreglos planos antes de calcular fuerzas. El costo es O(N) por frame, muy
+// por frame, muy pequeño frente al O(N^2) del kernel.
 int physics_soa_init(PhysicsSoA *soa, int max_bodies) {
   soa->x = malloc((size_t)max_bodies * sizeof(float));
   soa->y = malloc((size_t)max_bodies * sizeof(float));

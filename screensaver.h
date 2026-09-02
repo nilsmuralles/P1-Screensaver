@@ -65,7 +65,7 @@ void simulate_step_datos(Body *bodies, int n_bodies, float *ax, float *ay, float
 void calculate_forces_parallel_newton3(Body *bodies, int n_bodies, float *ax, float *ay);
 
 // --- Estrategia por tareas: el hilo "single" genera un task por cada
-// bloque de cuerpos; el runtime de OpenMP reparte esos tasks entre los
+// bloque de cuerpos. El runtime de OpenMP reparte esos tasks entre los
 // hilos disponibles (a diferencia de "datos", que usa omp for con
 // particionamiento decidido por la clausula schedule, no por el
 // programador creando tasks explicitos).
