@@ -48,13 +48,23 @@ static const char *CORONA_FS =
 "uniform sampler2D texture0;\n"
 "uniform vec4 colDiffuse;\n"
 "uniform float u_time;\n"
+"uniform vec2 u_center;\n"
+"uniform float u_radius;\n"
 "out vec4 finalColor;\n"
-"float noise2(vec2 p) {\n"
+// "noise2" es un nombre reservado en GLSL (funcion de ruido Perlin de
+// versiones antiguas del lenguaje); algunos compiladores lo siguen
+// tratando como predeclarado y rompen la compilacion si se redefine con
+// otra firma. Se renombra a "corona_noise" para evitar el choque.
+"float corona_noise(vec2 p) {\n"
 "  float h = sin(p.x * 127.1 + p.y * 311.7) * 43758.5453;\n"
 "  return fract(h);\n"
 "}\n"
 "void main() {\n"
-"  vec2 centered = fragTexCoord * 2.0 - 1.0;\n"
+// gl_FragCoord (posicion real en pixeles) en vez de fragTexCoord: igual que
+// con el fondo de estrellas, DrawCircleSector usa la textura interna de
+// "figuras" de raylib y no garantiza un fragTexCoord mapeado 0..1 sobre la
+// forma dibujada.
+"  vec2 centered = (gl_FragCoord.xy - u_center) / u_radius;\n"
 "  float dist = length(centered);\n"
 // Descarta explicitamente los fragmentos fuera del circulo unitario: no
 // basta con que baje el alpha a 0, porque si el blend mode no respeta el
@@ -64,8 +74,7 @@ static const char *CORONA_FS =
 "    discard;\n"
 "  }\n"
 "  float angle = atan(centered.y, centered.x);\n"
-"  vec2 pseudoPixel = fragTexCoord * 128.0;\n" // misma escala que CORONA_TEX_SIZE de la version CPU, para que el patron de ruido se vea igual
-"  float flicker = 0.5 + 0.5 * sin(angle * 6.0 + u_time * 1.5 + noise2(pseudoPixel) * 3.0);\n"
+"  float flicker = 0.5 + 0.5 * sin(angle * 6.0 + u_time * 1.5 + corona_noise(gl_FragCoord.xy) * 3.0);\n"
 "  float falloff = 1.0 - dist;\n"
 "  falloff = falloff * falloff;\n"
 "  float intensity = clamp(falloff * (0.6 + 0.4 * flicker), 0.0, 1.0);\n"

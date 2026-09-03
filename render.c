@@ -40,6 +40,8 @@ struct RenderShaderState {
   // region OpenMP extra cada frame solo para el efecto visual.
   Shader corona_shader;
   int loc_corona_time;
+  int loc_corona_center;
+  int loc_corona_radius;
 };
 
 static RenderShaderState *shader_state_init(int width, int height) {
@@ -63,6 +65,8 @@ static RenderShaderState *shader_state_init(int width, int height) {
 
   st->loc_star_time = GetShaderLocation(st->star_shader, "u_time");
   st->loc_corona_time = GetShaderLocation(st->corona_shader, "u_time");
+  st->loc_corona_center = GetShaderLocation(st->corona_shader, "u_center");
+  st->loc_corona_radius = GetShaderLocation(st->corona_shader, "u_radius");
   int loc_star_res  = GetShaderLocation(st->star_shader, "u_resolution");
   int loc_star_dens = GetShaderLocation(st->star_shader, "u_starDensity");
   int loc_star_twk  = GetShaderLocation(st->star_shader, "u_twinkleSpeed");
@@ -180,10 +184,14 @@ void render_sun_corona(RenderContext *ctx, const Body *bodies) {
   const Body *sun = &bodies[0];
   float corona_size = sun->radius * CORONA_SCREEN_SCALE;
   Vector2 center = { sun->x, sun->y };
+  float radius = corona_size / 2.0f;
+
+  SetShaderValue(ctx->shaders->corona_shader, ctx->shaders->loc_corona_center, &center, SHADER_UNIFORM_VEC2);
+  SetShaderValue(ctx->shaders->corona_shader, ctx->shaders->loc_corona_radius, &radius, SHADER_UNIFORM_FLOAT);
 
   BeginBlendMode(BLEND_ADDITIVE);
   BeginShaderMode(ctx->shaders->corona_shader);
-  DrawCircleSector(center, corona_size / 2.0f, 0, 360, CORONA_SEGMENTS, WHITE);
+  DrawCircleSector(center, radius, 0, 360, CORONA_SEGMENTS, WHITE);
   EndShaderMode();
   EndBlendMode();
 }

@@ -7,14 +7,16 @@ RAW_CSV = RESULTS_DIR / "bench_raw.csv"
 
 # Estrategias con gravedad exacta O(N^2), directamente comparables entre si
 # y contra "seq" para calcular speedup/eficiencia real de paralelismo.
-COMPARABLE_MODES = ["datos", "tareas"]
+# "espacial" se corrigio para sumar la fuerza de TODOS los cuerpos (no solo
+# celdas vecinas) -- ver commit "fix: wrong implementations of gravital
+# force" -- asi que ya hace el mismo trabajo O(N^2) que "datos"/"tareas" y
+# es justo compararla aqui.
+COMPARABLE_MODES = ["datos", "espacial", "tareas"]
 
-# "espacial" solo calcula fuerzas contra los cuerpos de las celdas vecinas
-# (3x3), no contra todos los N cuerpos como las demas estrategias. 
-# Al hacer menos calculos, cualquier tiempo mas bajo no viene del paralelismo 
-# sino de que resuelve un problema mas chico. Comparar su speedup contra "seq" 
-# seria enganoso. Por eso se grafica en un panel aparte, solo como referencia.
-APPROX_MODES = ["espacial"]
+# Ya no hay estrategias de aproximacion en el proyecto (se elimino
+# barnes_hut); se deja la lista vacia en vez de borrar las referencias de
+# plot_espacial_reference() mas abajo.
+APPROX_MODES = []
 
 # Nucleos fisicos reales de la maquina de prueba: 4 core / 8
 # hilos logicos por Hyperthreading. La curva principal de speedup/
